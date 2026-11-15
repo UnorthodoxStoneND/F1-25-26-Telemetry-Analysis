@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
@@ -82,6 +83,9 @@ func qualifyingMetas(anchor RecordingMeta, catalog []RecordingMeta) map[int]Reco
 	return out
 }
 func loadQualifyingWeekend(dir string, meta RecordingMeta, catalog []RecordingMeta, current *AnalysisModel) *QualifyingWeekend {
+	return loadQualifyingWeekendContext(context.Background(), dir, meta, catalog, current)
+}
+func loadQualifyingWeekendContext(ctx context.Context, dir string, meta RecordingMeta, catalog []RecordingMeta, current *AnalysisModel) *QualifyingWeekend {
 	q := &QualifyingWeekend{Anchor: meta.ID}
 	metas := qualifyingMetas(meta, catalog)
 	for _, kind := range qualifyingKinds(meta.Session) {
@@ -91,13 +95,14 @@ func loadQualifyingWeekend(dir string, meta RecordingMeta, catalog []RecordingMe
 			if entry.ID == meta.ID {
 				stage.Model = current
 			} else {
-				m, e := loadAnalysis(dir, entry)
+				m, e := loadAnalysisScoped(ctx, dir, entry, analysisTraceScope{})
 				if e != nil {
 					stage.Error = e.Error()
 				} else {
 					// Peer stages need timing/identity only; release driving traces.
 					compact := newModel(m.Meta)
 					compact.Frames = m.Frames
+					compact.traceScope = &analysisTraceScope{}
 					for i, d := range m.Drivers {
 						d.Samples = nil
 						d.raceObservations = nil

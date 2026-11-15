@@ -2,14 +2,14 @@
   "schema_version": 1,
   "id": "unorthodoxstonendmodding.udp-telemetry",
   "name": "UDP Telemetry",
-  "version": "0.3.9",
+  "version": "0.4.0",
   "author": "UnorthodoxStoneNDmodding",
   "description": "Live UDP telemetry plus automatically saved sessions and Telemetry Analysis for F1 25 and the 2026 Season Pack, including My Team.",
   "category": "utility",
   "kind": [],
   "compat": {
     "game": "f1_25",
-    "launcher": ">=1.9.42"
+    "launcher": ">=1.9.55"
   },
   "saves": {
     "affects": false

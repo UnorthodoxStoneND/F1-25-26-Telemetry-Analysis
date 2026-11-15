@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"path/filepath"
 	"time"
 )
 
@@ -33,7 +32,7 @@ func tyreColour(c Car) string {
 	case 18:
 		return "white"
 	}
-	return "white"
+	return ""
 }
 func sessionName(s int) string {
 	switch {
@@ -162,16 +161,7 @@ func (a *App) telemetryView() M {
 		if position(c) > 0 {
 			pos = fmt.Sprint(position(c))
 		}
-		pill := M{"text": "—", "tone": "muted"}
-		if c.HasStatus && compound(c.Compound) != "—" {
-			label := compound(c.Compound)
-			path, err := a.displayImage(filepath.Join(a.assets, label+"-"+tyreColour(c)+".png"))
-			if err == nil {
-				pill = M{"text": "", "sort": label, "image": M{"path": path, "width": 54, "height": 24, "fit": "contain", "transparent": true}}
-			} else {
-				pill = M{"text": label, "sort": label}
-			}
-		}
+		pill := tyreCell(c)
 		open := a.expandedSet && a.expanded == i && a.expandedUID == t.UID
 		avg := (c.Wear[0] + c.Wear[1] + c.Wear[2] + c.Wear[3]) / 4
 		row := M{"id": fmt.Sprintf("car-%d", i), "cells": []any{pos, driverName(i, c), pill, wearCell(c.Wear[2], known), wearCell(c.Wear[3], known), wearCell(c.Wear[0], known), wearCell(c.Wear[1], known), wearCell(avg, known), lapTime(c.Last), lapTime(c.Best), M{"text": "", "edit": M{"toggle": M{"value": open}}}}}

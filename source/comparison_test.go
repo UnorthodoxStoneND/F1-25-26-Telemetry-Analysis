@@ -2,9 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"image/color"
-	"image/png"
-	"os"
 	"strings"
 	"testing"
 )
@@ -32,31 +29,15 @@ func TestNoComparisonControlsAndSingleTrace(t *testing.T) {
 		}
 		return out
 	}
-	imagePath := func(view M) string {
+	hasOrange := func(view M) bool {
 		t.Helper()
-		for _, block := range view["body"].(M)["blocks"].([]M) {
-			if im, ok := block["image"].(M); ok && im["caption"] != nil {
-				return im["path"].(string)
-			}
+		charts := wireNodes(view, "chart")
+		if len(charts) != 5 {
+			t.Fatal("five native traces missing")
 		}
-		t.Fatal("chart missing")
-		return ""
-	}
-	hasOrange := func(path string) bool {
-		t.Helper()
-		f, e := os.Open(path)
-		if e != nil {
-			t.Fatal(e)
-		}
-		defer f.Close()
-		im, e := png.Decode(f)
-		if e != nil {
-			t.Fatal(e)
-		}
-		for y := im.Bounds().Min.Y; y < im.Bounds().Max.Y; y++ {
-			for x := im.Bounds().Min.X; x < im.Bounds().Max.X; x++ {
-				c := color.RGBAModel.Convert(im.At(x, y)).(color.RGBA)
-				if c == (color.RGBA{255, 167, 82, 255}) {
+		for _, c := range charts {
+			for _, v := range c["series"].([]any) {
+				if v.(map[string]any)["color"] == "#FFA752" {
 					return true
 				}
 			}
@@ -72,7 +53,7 @@ func TestNoComparisonControlsAndSingleTrace(t *testing.T) {
 	}
 	view := a.analysisView()
 	fields := controls(view)
-	if fields["reference_driver"]["value"] != "none" || fields["reference_lap"] != nil || hasOrange(imagePath(view)) {
+	if fields["reference_driver"]["value"] != "none" || fields["reference_lap"] != nil || hasOrange(view) {
 		t.Fatal("default no-comparison mode is ambiguous or draws a reference")
 	}
 	if !strings.Contains(view["subtitle"].(string), addonVersion) {
@@ -80,13 +61,13 @@ func TestNoComparisonControlsAndSingleTrace(t *testing.T) {
 	}
 	event(M{"reference_driver": "1"}, []string{"reference_driver"})
 	view = a.analysisView()
-	if controls(view)["reference_lap"] == nil || !hasOrange(imagePath(view)) {
+	if controls(view)["reference_lap"] == nil || !hasOrange(view) {
 		t.Fatal("comparison was not enabled")
 	}
 	// Native forms submit all values; only Changed fields may affect mode.
 	event(M{"reference_driver": "none", "reference_lap": "1", "lap": "1"}, []string{"reference_driver"})
 	view = a.analysisView()
-	if a.analysis.Compare || controls(view)["reference_driver"]["value"] != "none" || controls(view)["reference_lap"] != nil || hasOrange(imagePath(view)) {
+	if a.analysis.Compare || controls(view)["reference_driver"]["value"] != "none" || controls(view)["reference_lap"] != nil || hasOrange(view) {
 		t.Fatal("stale form values restored a disabled comparison")
 	}
 	event(M{"lap": "1", "reference_driver": "1", "reference_lap": "1"}, []string{"lap"})
@@ -97,7 +78,7 @@ func TestNoComparisonControlsAndSingleTrace(t *testing.T) {
 	a.analysisView()
 	event(M{"reference_lap": "0"}, []string{"reference_lap"})
 	view = a.analysisView()
-	if a.analysis.Compare || hasOrange(imagePath(view)) {
+	if a.analysis.Compare || hasOrange(view) {
 		t.Fatal("No comparison lap did not disable comparison")
 	}
 }

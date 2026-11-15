@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -93,7 +94,11 @@ func TestSessionTabsGridAndPositionOrdering(t *testing.T) {
 		}
 		positions := []string{}
 		for _, row := range results["rows"].([][]any) {
-			positions = append(positions, row[0].(string))
+			if cell, ok := row[0].(M); ok {
+				positions = append(positions, fmt.Sprint(cell["sort"]))
+			} else {
+				positions = append(positions, row[0].(string))
+			}
 		}
 		if !reflect.DeepEqual(positions, []string{"1", "2", "12", "—"}) {
 			t.Fatal("results not numerically sorted", positions)

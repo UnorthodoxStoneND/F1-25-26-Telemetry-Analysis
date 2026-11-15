@@ -104,7 +104,7 @@ def main():
         try:
             assert call('hello', {'api': 1, 'data_dir': str(data_dir), 'cache_dir': str(cache_dir),
                                  'profile': {'name': 'fixture', 'enabled': True, 'vanilla': False},
-                                 'launcher': '1.9.42'}) == {'api': 1}
+                                 'launcher': '1.9.55', 'capabilities': ['view.chart']}) == {'api': 1}
             check_view(call('view', {'section': 'telemetry'}), (data_dir, cache_dir))
             with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp:
                 def transmit(b):
@@ -154,6 +154,9 @@ def main():
                     check_view(view, (data_dir, cache_dir))
                     rows = table(view)['rows']
                     assert len(rows) == 5
+                    tyre = rows[0]['cells'][2]
+                    assert tyre['text'] == 'C3' and 'image' not in tyre
+                    assert tyre['edit']['colour'] == {'value': '#FF4A5B', 'disabled': True}
                     assert [c['text'] if isinstance(c, dict) else c for c in rows[0]['cells'][3:10]] == ['30.0%', '40.0%', '10.0%', '20.0%', '25.0%', '1:31.234', '1:30.000']
                     assert rows[0]['cells'][7]['bar'] == .25
                     assert rows[0]['cells'][1] == 'Driver 1'

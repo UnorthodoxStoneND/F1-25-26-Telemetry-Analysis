@@ -114,7 +114,7 @@ func TestQualifyingAdvancedView(t *testing.T) {
 		q := qualifyingFixture(kinds)
 		m := q.Stages[2].Model
 		a := App{data: t.TempDir(), rec: &Recorder{items: []RecordingMeta{m.Meta}}, analysis: AnalysisSelection{Model: m, Qualifying: q}}
-		a.displayCache = filepath.Join(a.data, "display")
+
 		view := a.analysisView()
 		tabs := wireNodes(view, "tabs")[0]["items"].([]any)
 		if tabs[1].(map[string]any)["label"] != "Advanced Telemetry" || len(wireNodes(view, "card")) != 3 {
@@ -122,7 +122,7 @@ func TestQualifyingAdvancedView(t *testing.T) {
 		}
 		a.analysis.Tab = "advanced"
 		view = a.analysisView()
-		if len(wireNodes(view, "image")) != 4 {
+		if len(wireNodes(view, "chart")) != 3 {
 			t.Fatal("three advanced charts missing")
 		}
 		raw, _ := json.Marshal(M{"event": M{"submit": M{"form": "analysis-qual-stage-" + m.Meta.ID, "values": M{"stage": fmt.Sprint(kinds[0])}}}})
@@ -138,13 +138,13 @@ func TestQualifyingAdvancedView(t *testing.T) {
 	for _, kind := range []int{8, 9, 13, 14} {
 		a := analysisFixture(kind)
 		a.data = t.TempDir()
-		a.displayCache = filepath.Join(a.data, "display")
+
 		table := analysisTable(a.analysisView(), "analysis-results")
 		if table == nil || len(table["columns"].([]M)) != 8 {
 			t.Fatal("single-stage results differ from practice", kind)
 		}
 		a.analysis.Tab = "advanced"
-		if len(wireNodes(a.analysisView(), "image")) != 3 {
+		if len(wireNodes(a.analysisView(), "chart")) != 2 {
 			t.Fatal("single-stage advanced charts", kind)
 		}
 	}
@@ -171,7 +171,7 @@ func TestQualifyingPreviewFromEnvironment(t *testing.T) {
 		}
 		q = loadQualifyingWeekend(filepath.Dir(path), meta, []RecordingMeta{meta}, m)
 	}
-	a := App{data: out, displayCache: filepath.Join(out, "display"), rec: &Recorder{items: []RecordingMeta{m.Meta}}, analysis: AnalysisSelection{Model: m, Qualifying: q}}
+	a := App{data: out, rec: &Recorder{items: []RecordingMeta{m.Meta}}, analysis: AnalysisSelection{Model: m, Qualifying: q}}
 	for _, tab := range []string{"stats", "advanced"} {
 		a.analysis.Tab = tab
 		view := a.analysisView()

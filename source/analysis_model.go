@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/binary"
 	"fmt"
 	"math"
@@ -63,6 +64,8 @@ type RecordedDriver struct {
 	raceObservations                    []RaceObservation
 	raceLast                            RaceObservation
 	raceLastSet                         bool
+	traceLaps                           []traceLapMark
+	traceCompactFrame                   int
 }
 type lapPoint struct {
 	Lap, Position int
@@ -101,11 +104,12 @@ type AnalysisModel struct {
 	raceGate         RaceCaptureGate
 	CompoundVisual   [256]int
 	raceMetrics      *RaceMetrics
+	traceScope       *analysisTraceScope
 }
 
 func loadAnalysis(dir string, meta RecordingMeta) (*AnalysisModel, error) {
 	m := newModel(meta)
-	partial, e := readJournal(filepath.Join(dir, meta.ID+".udp.gz"), m.ingest)
+	partial, e := readJournalContext(context.Background(), filepath.Join(dir, meta.ID+".udp.gz"), true, m.ingest)
 	m.Truncated = partial
 	return m, e
 }
@@ -172,7 +176,7 @@ func (m *AnalysisModel) ingest(b []byte) {
 		if len(p) < slots*57 {
 			return
 		}
-		points := make([]lapPoint, slots)
+		points := m.pairingPoints(frame, slots)
 		for i := 0; i < slots; i++ {
 			r := p[i*57:]
 			d := &m.Drivers[i]
@@ -504,6 +508,10 @@ func (m *AnalysisModel) telemetry(b []byte, points []lapPoint) {
 			continue
 		}
 		d := &m.Drivers[i]
+		d.noteTraceLap(s)
+		if m.traceScope != nil && !m.traceScope.captures(i, lp.Lap) {
+			continue
+		}
 		k := sort.Search(len(d.Samples), func(j int) bool {
 			return d.Samples[j].Time > s.Time || (d.Samples[j].Time == s.Time && d.Samples[j].Frame >= s.Frame)
 		})
@@ -521,6 +529,7 @@ func (m *AnalysisModel) telemetry(b []byte, points []lapPoint) {
 func (m *AnalysisModel) trimZeroClockFuture(clock float64, frame uint32) {
 	for i := range m.Drivers {
 		m.Drivers[i].rewindRaceObservations(clock, &frame)
+		m.Drivers[i].trimTraceLaps(clock, &frame)
 		kept := m.Drivers[i].Samples[:0]
 		for _, s := range m.Drivers[i].Samples {
 			if s.Time != clock || s.Frame <= int(frame) {
@@ -584,6 +593,10 @@ func (m *AnalysisModel) rewind(clock float64) {
 		if k > 0 {
 			lap = d.Samples[k-1].Lap
 		}
+		if m.traceScope != nil {
+			lap = d.traceLapAt(clock)
+		}
+		d.trimTraceLaps(clock, nil)
 		for n := range d.Laps {
 			if n >= lap {
 				delete(d.Laps, n)

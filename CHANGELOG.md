@@ -1,5 +1,14 @@
 # UDP Telemetry changelog
 
+## 0.4.0 — 15 November 2026
+
+- Replace generated analysis images with Swofty's native chart controls across practice, qualifying, sprint qualifying, races and sprints. Retain the existing results, analysis tabs and shared driver selections.
+- Require Swofty 1.9.55 or newer and negotiate native chart support through the `view.chart` capability, without an upper launcher-version limit. Show a clear message if chart support is unavailable while preserving live telemetry and recording.
+- Use native coloured circles beside tyre compound names. Read the actual compound for the label and the visual compound for the dry tyre colour; intermediates remain green and wets blue. Leave unknown colours uncoloured.
+- Replace podium images with native medal emoji for first, second and third, retaining numeric sorting.
+- Load analysis timing data separately from selected-lap traces, cancel superseded loads and avoid resending unchanged completed-session charts on every tick.
+- Document the background helper, local UDP listener, read-only team-name capture, process lifetime and local storage in the README. Continue distributing one installable ZIP.
+
 ## 0.3.9 — 14 November 2026
 
 - Apply the new qualifying views to both qualifying and sprint qualifying. Single-stage short/one-shot formats use the practice-style results table; full formats show Q3/Q2/Q1 or SQ3/SQ2/SQ1 side by side, with recorded knockout groups and missing-stage placeholders.

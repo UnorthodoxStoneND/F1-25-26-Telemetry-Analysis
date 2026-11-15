@@ -1,13 +1,9 @@
 package main
 
 import (
-	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	"image/png"
 	"math"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -83,34 +79,6 @@ func (a *App) raceSelectionEvent(click, form string, values map[string]json.RawM
 	}
 	return true, nil
 }
-func (a *App) raceImage(m *AnalysisModel, kind string, render func(string) error) M {
-	key := sha256.Sum256([]byte(fmt.Sprintf("%s/r2/%s/%d/%s/%x/%d/%s", addonVersion, m.Meta.ID, m.Frames, m.Meta.State, a.analysis.RaceDrivers, a.analysis.RaceLap, kind)))
-	path := filepath.Join(a.data, "race-analysis-v3", fmt.Sprintf("%x.png", key[:16]))
-	var cfgWidth, cfgHeight int
-	read := func() error {
-		file, e := os.Open(path)
-		if e != nil {
-			return e
-		}
-		defer file.Close()
-		cfg, e := png.DecodeConfig(file)
-		cfgWidth, cfgHeight = cfg.Width, cfg.Height
-		return e
-	}
-	if e := read(); e != nil {
-		if e = render(path); e != nil {
-			return textBlock("Chart unavailable: " + e.Error())
-		}
-		if e = read(); e != nil {
-			return textBlock("Chart unavailable: " + e.Error())
-		}
-	}
-	display, e := a.displayImage(path)
-	if e != nil {
-		return textBlock("Chart unavailable: " + e.Error())
-	}
-	return M{"image": M{"path": display, "width": cfgWidth / 2, "height": cfgHeight / 2, "fit": "contain"}}
-}
 func raceCard(title string, blocks ...M) M { return M{"card": M{"title": title, "blocks": blocks}} }
 func (a *App) raceLapSelector(m *AnalysisModel, label string) M {
 	opts := []M{}
@@ -131,23 +99,22 @@ func (a *App) raceAnalysisBlocks(m *AnalysisModel) []M {
 	if len(selected) == 0 {
 		return append(out, textBlock("No drivers selected. Choose any drivers or select the full grid."))
 	}
-	out = append(out, a.raceImage(m, "legend", func(path string) error { return renderRaceLegend(path, m, selected) }))
 	switch s.Tab {
 	case "traces":
 		out = append(out, a.raceLapAnalysis(m, selected)...)
 	case "tyres":
-		out = append(out, a.raceImage(m, "strategy-timeline", func(path string) error { return renderTyreTimeline(path, m, selected) }))
-		w, columns := 1800, 2
+		out = append(out, nativeTyreTimeline(m, selected))
+		columns := 2
 		if len(selected) > 10 {
-			w, columns = 3600, 1
+			columns = 1
 		}
-		out = append(out, M{"grid": M{"columns": columns, "blocks": []M{a.raceImage(m, "pit-averages", func(path string) error { return renderPitAverages(path, m, selected, w) }), a.raceImage(m, "stint-columns", func(path string) error { return renderStintColumns(path, m, selected, w) })}}})
+		out = append(out, M{"grid": M{"columns": columns, "blocks": []M{nativePitAverages(m, selected), nativeStintColumns(m, selected)}}})
 	case "positions":
 		out = append(out, a.raceLapLines(m, selected, "position"), a.raceLapLines(m, selected, "gap"))
 
 	case "progression":
-		duel := a.raceImage(m, "sector-duel", func(path string) error { return renderSectorDuel(path, m, selected, 3600) })
-		out = append(out, a.raceLapLines(m, selected, "lap-times"), duel, a.raceLapLines(m, selected, "pace"), a.raceImage(m, "distribution", func(path string) error { return renderLapDistribution(path, m, selected, 3600) }))
+		duel := nativeSectorDuel(m, selected)
+		out = append(out, a.raceLapLines(m, selected, "lap-times"), duel, a.raceLapLines(m, selected, "pace"), nativeDistribution(m, selected, false, false))
 	}
 	return out
 }
@@ -172,34 +139,20 @@ func (a *App) raceLapAnalysis(m *AnalysisModel, selected []int) []M {
 	limits := [][2]float64{{0, 360}, {0, 100}, {0, 100}, {0, 8}, {0, 15000}}
 	for channel := 0; channel < 5; channel++ {
 		ch := channel
-		series := []raceSeries{}
 		for _, i := range selected {
-			data := raceSeries{Driver: i}
-			samples := traces[i]
-			step := traceFrameStep(samples)
-			for n, s := range samples {
-				values := []float64{s.Speed, s.Throttle, s.Brake, s.Gear, s.RPM}
-				if ch == 0 && s.Speed > limits[ch][1] {
-					limits[ch][1] = math.Ceil(s.Speed/40) * 40
+			for _, sample := range traces[i] {
+				if ch == 0 && sample.Speed > limits[ch][1] {
+					limits[ch][1] = math.Ceil(sample.Speed/40) * 40
 				}
-				if ch == 4 && s.RPM > limits[ch][1] {
-					limits[ch][1] = math.Ceil(s.RPM/1000) * 1000
+				if ch == 4 && sample.RPM > limits[ch][1] {
+					limits[ch][1] = math.Ceil(sample.RPM/1000) * 1000
 				}
-				if ch == 3 && s.Gear < limits[ch][0] {
-					limits[ch][0] = s.Gear
+				if ch == 3 && sample.Gear < limits[ch][0] {
+					limits[ch][0] = sample.Gear
 				}
-				p := racePoint{X: s.Distance, Y: values[ch]}
-				if n > 0 {
-					p.Break = !traceConnect(samples[n-1], s, step)
-				}
-				data.Points = append(data.Points, p)
 			}
-			series = append(series, data)
 		}
-		kind := fmt.Sprintf("lap-%d-channel-%d", lap, ch)
-		charts = append(charts, a.raceImage(m, kind, func(path string) error {
-			return renderRaceLines(path, titles[ch], fmt.Sprintf("Race lap %d", lap), "Lap distance · m", units[ch], series, &limits[ch], false, false, ch == 3, 2200, 430)
-		}))
+		charts = append(charts, nativeTraceChannel(fmt.Sprintf("lap-%d-channel-%d", lap, ch), titles[ch], units[ch], m, selected, traces, ch, &limits[ch]))
 	}
 	rows := [][]any{}
 	for _, i := range selected {
@@ -280,17 +233,37 @@ func (a *App) raceLapLines(m *AnalysisModel, selected []int, kind string) M {
 	case "pace":
 		title, subtitle, unit = "Pace vs the field", "Delta to the entire field's median on the same lap · all completed timed laps included", "Seconds vs field median"
 	}
-	return a.raceImage(m, kind, func(path string) error {
-		if kind == "pace" {
-			return renderFieldPace(path, m, selected)
+	if kind == "pace" {
+		return nativeFieldPace(m, selected)
+	}
+	x, y := nativeAxis("Race lap", "integer"), nativeAxis(unit, "seconds")
+	if kind == "position" {
+		y["format"] = "integer"
+		ticks := []M{}
+		for pos := 1; pos <= max(2, len(raceDriverIndices(m))); pos++ {
+			ticks = append(ticks, M{"value": pos, "label": fmt.Sprint(pos)})
 		}
-		if kind == "lap-times" {
-			return renderLapProgression(path, m, selected, all)
+		y["ticks"] = ticks
+	}
+	if kind == "lap-times" {
+		y["format"] = "lap_time"
+	}
+	if limits != nil {
+		y["domain"] = *limits
+	}
+	y["reversed"] = inverse
+	x["domain"] = []float64{0, float64(max(1, metrics.MaxLap))}
+	c := nativeChart(kind, title, subtitle, x, y, 400)
+	for _, s := range all {
+		nativeRaceLine(c, m.Drivers[s.Driver].name(s.Driver), nativeColour(s.Driver), s.Points, true, stepped, kind == "lap-times")
+	}
+	if kind == "lap-times" {
+		stats := [][]any{}
+		for _, i := range selected {
+			best, avg := raceLapSummary(m, i)
+			stats = append(stats, []any{m.Drivers[i].name(i), lapTime(best), lapTime(avg)})
 		}
-		w, h := 1800, 680
-		if len(selected) > 10 || kind == "position" || kind == "gap" {
-			w, h = 3600, 900
-		}
-		return renderRaceLines(path, title, subtitle, "Race lap", unit, all, limits, inverse, true, stepped, w, h)
-	})
+		return raceCard("Lap-by-lap progression", nativeBlock(c), tableBlock("lap-progression-averages", []string{"Driver", "Best", "Average"}, stats))
+	}
+	return nativeBlock(c)
 }

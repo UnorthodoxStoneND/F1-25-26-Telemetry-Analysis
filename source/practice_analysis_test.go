@@ -13,7 +13,7 @@ import (
 func TestPracticeAnalysisDataAndNavigation(t *testing.T) {
 	a := analysisFixture(1)
 	a.data = t.TempDir()
-	a.displayCache = filepath.Join(a.data, "display")
+
 	m := a.analysis.Model
 	m.Drivers[0].TeamKnown = true
 	m.Drivers[0].TeamID = 7
@@ -46,7 +46,7 @@ func TestPracticeAnalysisDataAndNavigation(t *testing.T) {
 	}
 	a.analysis.Tab = "practice"
 	view = a.analysisView()
-	if len(wireNodes(view, "image")) != 5 || strings.Contains(string(mustJSON(view)), "Laps & sectors") {
+	if len(wireNodes(view, "chart")) != 5 || strings.Contains(string(mustJSON(view)), "Laps & sectors") {
 		t.Fatal("practice charts/navigation")
 	}
 	a.raceSelectionEvent("analysis-race-all", "", nil, nil)
@@ -76,7 +76,7 @@ func TestPracticePreviewFromEnvironment(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	a := App{data: out, displayCache: filepath.Join(out, "display"), rec: &Recorder{items: []RecordingMeta{meta}}, analysis: AnalysisSelection{Model: m}}
+	a := App{data: out, rec: &Recorder{items: []RecordingMeta{meta}}, analysis: AnalysisSelection{Model: m}}
 	a.ensureRaceSelection(m)
 	for _, i := range raceDriverIndices(m) {
 		a.analysis.RaceDrivers |= 1 << uint(i)

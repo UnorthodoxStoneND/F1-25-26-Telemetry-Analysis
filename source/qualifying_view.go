@@ -56,7 +56,7 @@ func (a *App) qualifyingBlocks(m *AnalysisModel, advanced bool) []M {
 					content = append(content, a.qualifyingTable(s, advancedRows, best, ""))
 				}
 				if len(outRows) > 0 {
-					content = append(content, M{"text": "Knocked out", "tone": "bad"}, a.qualifyingTable(s, outRows, best, "-out"))
+					content = append(content, M{"text": M{"text": "Knocked out", "tone": "bad"}}, a.qualifyingTable(s, outRows, best, "-out"))
 				}
 				if len(rows) == 0 {
 					content = append(content, textBlock("No driver timing recorded"))
@@ -96,12 +96,11 @@ func (a *App) qualifyingBlocks(m *AnalysisModel, advanced bool) []M {
 	if len(options) > 1 {
 		out = append(out, M{"form": M{"id": "analysis-qual-stage-" + m.Meta.ID, "live": true, "fields": []M{selectionField("stage", "Qualifying stage", fmt.Sprint(a.analysis.QualStage), options)}}})
 	}
-	signature := q.signature()
-	out = append(out, a.raceImage(m, fmt.Sprintf("quali-timeline/%d/%s", selected, signature), func(path string) error { return renderQualifyingTimeline(path, q, selected) }))
+	out = append(out, nativeQualifyingTimeline(q, selected))
 	if len(q.Stages) > 1 {
-		out = append(out, a.raceImage(m, "quali-knockout/"+signature, func(path string) error { return renderKnockoutProgression(path, q) }))
+		out = append(out, nativeKnockout(q))
 	}
-	out = append(out, a.raceImage(m, "quali-teammates/"+signature, func(path string) error { return renderTeammateDuels(path, q) }))
+	out = append(out, nativeTeammates(q))
 	return out
 }
 func (a *App) qualifyingTable(s QualifyingStage, rows []QualifyingRow, leader uint32, suffix string) M {

@@ -2,13 +2,9 @@ package main
 
 import (
 	"fmt"
-	"image"
-	"image/color"
-	"image/draw"
-	"image/png"
+
 	"math"
-	"os"
-	"path/filepath"
+
 	"strings"
 )
 
@@ -95,35 +91,4 @@ func (m *AnalysisModel) usedCompounds(index int) string {
 		return "—"
 	}
 	return strings.Join(labels, " · ")
-}
-func (a *App) podiumPosition(pos int) any {
-	if pos < 1 || pos > 3 || a.displayCache == "" {
-		return knownInt(pos)
-	}
-	path := filepath.Join(a.data, "results-v4", fmt.Sprintf("position-%d.png", pos))
-	if _, e := os.Stat(path); e != nil {
-		im := image.NewRGBA(image.Rect(0, 0, 60, 52))
-		draw.Draw(im, im.Bounds(), &image.Uniform{raceBG}, image.Point{}, draw.Src)
-		c := []color.RGBA{{232, 190, 79, 255}, {195, 205, 218, 255}, {195, 133, 83, 255}}[pos-1]
-		if drawSummaryText(im, []summaryText{{Text: fmt.Sprint(pos), X: 5, Y: 1, W: 50, H: 50, Size: 36, Weight: 700, Colour: c}}) != nil {
-			return knownInt(pos)
-		}
-		if os.MkdirAll(filepath.Dir(path), 0755) != nil {
-			return knownInt(pos)
-		}
-		file, e := os.Create(path)
-		if e != nil {
-			return knownInt(pos)
-		}
-		e = png.Encode(file, im)
-		_ = file.Close()
-		if e != nil {
-			return knownInt(pos)
-		}
-	}
-	display, e := a.displayImage(path)
-	if e != nil {
-		return knownInt(pos)
-	}
-	return M{"text": "", "sort": pos, "image": M{"path": display, "width": 30, "height": 26}}
 }

@@ -1,10 +1,9 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -24,6 +23,9 @@ type AnalysisSelection struct {
 	Qualifying                                         *QualifyingWeekend
 	QualStage                                          int
 	QualStageSession                                   string
+	LoadScope                                          analysisTraceScope
+	Cancel                                             context.CancelFunc
+	DataStamp                                          string
 }
 
 func sessionLabel(n int) string {
@@ -145,8 +147,17 @@ func lapDelta(selected, reference uint32) M {
 }
 func (a *App) requestAnalysis(meta RecordingMeta, refresh bool) {
 	s := &a.analysis
-	if !refresh && ((s.Model != nil && s.Model.Meta.ID == meta.ID) || s.Loading == meta.ID) {
-		return
+	scope := a.wantedTraceScope(meta)
+	if !refresh {
+		if s.Model != nil && s.Model.Meta.ID == meta.ID && s.Model.coversScope(scope) {
+			if s.Model.traceScope != nil {
+				s.Model.releaseUnusedTraces(scope)
+			}
+			return
+		}
+		if s.Loading == meta.ID && s.LoadScope == scope {
+			return
+		}
 	}
 	if a.rec.current != nil && a.rec.current.ID == meta.ID {
 		if e := a.rec.flush(); e != nil {
@@ -155,6 +166,12 @@ func (a *App) requestAnalysis(meta RecordingMeta, refresh bool) {
 		}
 	}
 	s.Generation++
+	if s.Cancel != nil {
+		s.Cancel()
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	s.Cancel = cancel
+	s.LoadScope = scope
 	generation := s.Generation
 	s.Loading = meta.ID
 	s.Error = ""
@@ -163,10 +180,11 @@ func (a *App) requestAnalysis(meta RecordingMeta, refresh bool) {
 	dir := a.rec.dir
 	catalog := a.rec.catalog()
 	go func() {
-		m, e := loadAnalysis(dir, meta)
+		defer cancel()
+		m, e := loadAnalysisScoped(ctx, dir, meta, scope)
 		var qualifying *QualifyingWeekend
 		if e == nil && qualifyingSession(meta.Session) {
-			qualifying = loadQualifyingWeekend(dir, meta, catalog, m)
+			qualifying = loadQualifyingWeekendContext(ctx, dir, meta, catalog, m)
 		}
 		a.mu.Lock()
 		defer a.mu.Unlock()
@@ -184,11 +202,15 @@ func (a *App) requestAnalysis(meta RecordingMeta, refresh bool) {
 	}()
 }
 func (a *App) analysisView() M {
+	if a.launcherKnown && !a.nativeCharts {
+		return nativeUnsupportedView()
+	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	blocks := []M{}
 	s := &a.analysis
 	finish := func() M {
+		s.DataStamp = a.analysisDataStampLocked()
 		return M{"subtitle": "Saved UDP sessions · v" + addonVersion, "tick": true, "body": M{"blocks": blocks}}
 	}
 	if a.rec == nil {
@@ -446,23 +468,7 @@ func (a *App) analysisView() M {
 				blocks = append(blocks, textBlock(ref.name(s.ReferenceDriver)+": "+warning+"."))
 			}
 		}
-		path := filepath.Join(a.data, fmt.Sprintf("trace-v8-%s-%d-%d-%d-%d-%d-%d.png", meta.ID, m.Frames, s.Driver, s.Lap, s.ReferenceDriver, s.ReferenceLap, s.Window))
-		_, chartErr := os.Stat(path)
-		if chartErr != nil {
-			chartErr = renderTrace(path, selected, comparison, s.Window)
-		}
-		if chartErr == nil {
-			path, chartErr = a.displayImage(path)
-		}
-		if e := chartErr; e != nil {
-			blocks = append(blocks, textBlock(e.Error()))
-		} else {
-			caption := fmt.Sprintf("Blue: %s · lap %d", d.name(s.Driver), s.Lap)
-			if s.ReferenceLap > 0 {
-				caption += fmt.Sprintf(" | Orange: %s · lap %d", ref.name(s.ReferenceDriver), s.ReferenceLap)
-			}
-			blocks = append(blocks, M{"image": M{"path": path, "width": 1100, "height": 770, "fit": "contain", "caption": caption}})
-		}
+		blocks = append(blocks, nativeLegacyTraces(m, s, selected, comparison)...)
 	} else if s.Tab == "laps" {
 		opts := validLapOptions(d)
 		selectLap(&s.Lap, opts)

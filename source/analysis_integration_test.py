@@ -54,6 +54,7 @@ def validate_image_roots(value, roots):
 class Helper:
     def __init__(self, data):
         self.image_roots = (data, data.parent.parent/'cache'/'unorthodoxstonendmodding.udp-telemetry')
+        self.native_views = data.parent.parent/'native-views.jsonl'
         self.proc = subprocess.Popen([str(ROOT/'bin/udp-telemetry.exe')],
             env={**os.environ, 'F1_TELEMETRY_TEST_DOCUMENTS': str(data.parent.parent/'Documents')},
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -65,7 +66,7 @@ class Helper:
                 self.messages.put(json.loads(line))
         threading.Thread(target=read, daemon=True).start()
         assert self.call('hello', {'api': 1, 'data_dir': str(data),
-            'cache_dir': str(self.image_roots[1]),
+            'cache_dir': str(self.image_roots[1]), 'launcher': '1.9.55', 'capabilities': ['view.chart'],
             'profile': {'name': 'fixture', 'enabled': True, 'vanilla': False}}) == {'api': 1}
 
     def send(self, value):
@@ -84,6 +85,8 @@ class Helper:
                 assert 'error' not in message, message
                 if method == 'view':
                     validate_image_roots(message['result'], self.image_roots)
+                    with self.native_views.open('a', encoding='utf-8') as output:
+                        output.write(json.dumps(message['result'])+'\n')
                 return message['result']
         raise AssertionError('helper timeout')
 
@@ -310,9 +313,9 @@ def exercise(folder):
                 assert tabs['active'] == 'stats'
                 assert not any(b.get('id', '').startswith('analysis-race-') for b in nodes(view, 'form'))
                 results_before = table_id(view, 'analysis-results')['rows']
-                assert any(im.get('height') == 72 for im in nodes(view, 'image'))
+                assert any(len(b.get('stats', [])) == 6 for b in view['body']['blocks'])
                 view = tab(helper, 'traces')
-                assert len(list(nodes(view, 'image'))) == 7, view
+                assert len(list(nodes(view, 'chart'))) == 5, view
                 times = table_id(view, 'race-lap-times')
                 assert len(times['rows']) == 1 and times['rows'][0][0] == 'Fixture Driver A'
                 assert any(g['columns'] == [3, 2] for g in nodes(view, 'grid'))
@@ -329,9 +332,9 @@ def exercise(folder):
                 helper.event('analysis-race-lap-'+meta['id'], {'lap': '2'})
                 lap_rows = table_id(helper.view(), 'race-lap-times')['rows']
                 assert len(lap_rows) == 2 and all(len(row) == 5 for row in lap_rows), lap_rows
-                for target, count in (('tyres', 5), ('positions', 4), ('progression', 6)):
+                for target, count in (('tyres', 3), ('positions', 2), ('progression', 4)):
                     view = tab(helper, target)
-                    assert len(list(nodes(view, 'image'))) == count, target
+                    assert len(list(nodes(view, 'chart'))) == count, target
                     chips = [n for n in all_dicts(view) if n.get('id', '').startswith(chip_prefix)]
                     assert len(chips) == 2 and all(c['style'] == 'primary' for c in chips), (target, chips)
                     (folder/f'{target}-{fmt}.json').write_text(json.dumps(view, indent=2))
@@ -349,7 +352,7 @@ def exercise(folder):
                 assert any(f.get('id') == 'analysis-save' for f in nodes(helper.view(), 'form'))
                 helper.event('analysis-save', {'name': f'My Team {fmt}'})
                 assert not any(f.get('id') == 'analysis-save' for f in nodes(helper.view(), 'form'))
-                assert '0.3.9' in helper.view()['subtitle']
+                assert '0.4.0' in helper.view()['subtitle']
                 live = helper.call('view', {'section': 'telemetry'})
                 assert 'analysis-' not in json.dumps(live) and 'recording' not in json.dumps(live).lower()
                 print(f'PASS: {fmt} race tabs, five separate traces, timing side panel, shared multi-driver selection and all strategy/progression charts')
@@ -364,10 +367,10 @@ def exercise(folder):
                     assert labels == ['Overview', 'Session Analysis'], labels
                     assert [c['title'] for c in table_id(view, 'analysis-results')['columns']] == ['POS','Full Driver Name','Team','Compounds','Laps','Fastest Lap','Gap','Avg Time']
                     view = tab(helper, 'practice')
-                    assert len(list(nodes(view, 'image'))) == 5, view
+                    assert len(list(nodes(view, 'chart'))) == 5, view
                     click(helper, 'analysis-race-all')
                     view = helper.view()
-                    assert len(list(nodes(view, 'image'))) == 5
+                    assert len(list(nodes(view, 'chart'))) == 5
                     chips = [n for n in all_dicts(view) if n.get('id', '').startswith('analysis-race-driver-')]
                     assert len(chips) == 2 and all(c['style'] == 'primary' for c in chips)
                     click(helper, 'analysis-race-none')
@@ -378,7 +381,7 @@ def exercise(folder):
                 assert labels == ['Qualifying Results', 'Advanced Telemetry'], labels
                 assert [c['title'] for c in table_id(view, 'analysis-results')['columns']] == ['POS','Full Driver Name','Team','Compounds','Laps','Fastest Lap','Gap','Avg Time']
                 view = tab(helper, 'advanced')
-                assert len(list(nodes(view, 'image'))) == 3, view
+                assert len(list(nodes(view, 'chart'))) == 2, view
                 view = tab(helper, 'laps')
                 assert next(nodes(view, 'tabs'))['active'] == 'stats'
             # Full qualifying and sprint qualifying link only their own stages.
@@ -390,7 +393,7 @@ def exercise(folder):
                 view = select_record(helper, meta)
                 assert len([c for c in nodes(view, 'card') if c.get('title') in ['Q1','Q2','Q3','SQ1','SQ2','SQ3']]) == 3, view
                 view = tab(helper, 'advanced')
-                assert len(list(nodes(view, 'image'))) == 4, view
+                assert len(list(nodes(view, 'chart'))) == 3, view
                 selector = next(f for f in nodes(view,'form') if f['id'].startswith('analysis-qual-stage-'))
                 assert [int(o['value']) for o in selector['fields'][0]['select']['options']] == list(kinds), selector
                 helper.event(selector['id'], {'stage': str(kinds[0])})
@@ -419,11 +422,15 @@ def exercise(folder):
             assert results['columns'][2]['title'] == 'Team'
             assert [r[2] for r in results['rows'][:2]] == ['Fixture Custom Constructor', 'Fixture My Team'], results
             view = tab(helper, 'traces')
-            assert len(list(nodes(view, 'image'))) == 7
-        print('PASS: helper restart retains saved sessions, custom teams, association, readable race charts and allowed launcher image paths')
+            assert len(list(nodes(view, 'chart'))) == 5
+        print('PASS: helper restart retains saved sessions, custom teams, association, native race charts and native medals and tyre cells')
     finally:
         helper.close()
-    print(f'Fixture and chart files: {folder}')
+    documents = folder/'Documents'/'F1 Game Telemetry'
+    assert not list(documents.rglob('*.png')), 'Analysis generated a PNG in Documents'
+    assert not list(documents.rglob('*.svg')), 'Analysis generated an SVG in Documents'
+    print('PASS: no chart image files created in Documents across selections and helper restarts')
+    print(f'Fixture and native chart specifications: {folder}')
 
 
 if __name__ == '__main__':
