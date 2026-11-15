@@ -1,0 +1,24 @@
+# Build and release output
+/bin/
+/dist/
+/.verify/
+/.gocache/
+*.exe
+*.pdb
+*.test
+coverage.out
+
+# Local runtime data and recordings
+/F1 Game Telemetry/
+/recordings/
+/settings.json
+*.udp.gz
+
+# Editor and Python caches
+__pycache__/
+*.py[cod]
+.venv/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

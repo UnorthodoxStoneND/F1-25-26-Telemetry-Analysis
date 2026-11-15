@@ -1,0 +1,43 @@
+name: Windows addon checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      CGO_ENABLED: '0'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: source/go.mod
+          cache: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.14'
+      - name: Build Windows helper
+        working-directory: source
+        run: go build -buildvcs=false -trimpath -ldflags '-s -w -H=windowsgui' -o ../bin/udp-telemetry.exe .
+      - name: Go tests
+        working-directory: source
+        run: go test ./...
+      - name: Go vet
+        working-directory: source
+        run: go vet ./...
+      - name: Live UDP protocol integration
+        run: python source/integration_test.py
+      - name: Saved analysis integration
+        run: python source/analysis_integration_test.py
+      - name: Verify installable packages
+        run: python source/package.py
