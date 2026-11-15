@@ -23,18 +23,34 @@ def privacy(name, raw):
             raise AssertionError(f"Email address or personal Windows path in {name}")
 
 
+def privacy_files(archive):
+    with zipfile.ZipFile(archive) as z:
+        for name in z.namelist():
+            privacy(name, z.read(name))
+    tracked = subprocess.check_output(["git", "-C", str(ROOT), "ls-files", "-z"])
+    for name in tracked.decode().split("\0"):
+        if name:
+            privacy(name, (ROOT / name).read_bytes())
+    print("PASS: source and ZIP contain no email addresses or personal Windows paths")
+
+
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--archive", type=Path, help="Use an isolated check package instead of dist")
+    parser.add_argument("--check", choices=("all", "integrity", "privacy"), default="all")
+    args = parser.parse_args()
     manifest = json.loads((ROOT / "swofty.json").read_text(encoding="utf-8"))
     version = manifest["version"]
+    archive = args.archive or ROOT / "dist" / f"UDP_Telemetry_v{version}.zip"
+    if args.check == "privacy":
+        privacy_files(archive)
+        return
     source = (ROOT / "source/main.go").read_text(encoding="utf-8")
     assert f'const addonVersion = "{version}"' in source
     assert f"## {version} " in (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     assert f"UDP_Telemetry_v{version}.zip" in (ROOT / "README.md").read_text(encoding="utf-8")
     assert manifest["compat"]["launcher"] == ">=1.9.55"
     assert manifest["launcher"]["program"]["windows"] == "bin/udp-telemetry.exe"
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--archive", type=Path, help="Use an isolated check package instead of dist")
-    archive = parser.parse_args().archive or ROOT / "dist" / f"UDP_Telemetry_v{version}.zip"
     with zipfile.ZipFile(archive) as z:
         names = z.namelist()
         assert z.testzip() is None and len(names) == len(set(names))
@@ -46,17 +62,14 @@ def main():
             assert name in expected or (path.parent == PurePosixPath("source") and path.suffix in {".go", ".py"})
             raw = z.read(name)
             assert raw == (ROOT / name).read_bytes(), f"Stale package file: {name}"
-            privacy(name, raw)
         assert json.loads(z.read("swofty.json")) == manifest
     with tempfile.TemporaryDirectory() as temporary:
         subprocess.run([sys.executable, str(ROOT / "source/package.py"), "--output", temporary], check=True)
         repeated = Path(temporary) / archive.name
         assert hashlib.sha256(repeated.read_bytes()).digest() == hashlib.sha256(archive.read_bytes()).digest(), "ZIP is not reproducible"
-    tracked = subprocess.check_output(["git", "-C", str(ROOT), "ls-files", "-z"])
-    for name in tracked.decode().split("\0"):
-        if name:
-            privacy(name, (ROOT / name).read_bytes())
-    print("PASS: versions, complete ZIP, reproducibility, no images/recordings/caches, no email addresses or personal paths")
+    print("PASS: versions, complete ZIP, reproducibility, no images/recordings/caches")
+    if args.check == "all":
+        privacy_files(archive)
 
 
 if __name__ == "__main__":
