@@ -1,7 +1,6 @@
 package main
 
 import (
-	"path/filepath"
 	"reflect"
 	"testing"
 )
@@ -48,7 +47,7 @@ func TestRaceResultsColumnsGapsAndNames(t *testing.T) {
 	}
 	a := analysisFixture(15)
 	a.data = t.TempDir()
-	a.displayCache = filepath.Join(a.data, "display")
+
 	table := analysisTable(a.analysisView(), "analysis-results")
 	titles := []string{}
 	for _, col := range table["columns"].([]M) {
@@ -57,7 +56,7 @@ func TestRaceResultsColumnsGapsAndNames(t *testing.T) {
 	if !reflect.DeepEqual(titles, []string{"POS", "Driver full name", "Team", "Compounds used", "Gap", "Grid", "+/-"}) {
 		t.Fatal(titles)
 	}
-	if cell, ok := a.podiumPosition(1).(M); !ok || cell["image"] == nil {
-		t.Fatal("podium color not emitted")
+	if cell, ok := a.podiumPosition(1).(M); !ok || cell["text"] != "🥇" || cell["sort"] != 1 || cell["image"] != nil {
+		t.Fatal("native podium medal not emitted")
 	}
 }

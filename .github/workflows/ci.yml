@@ -9,10 +9,93 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: addon-checks-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test:
+  checks:
+    # Every matrix entry creates its own check result on the pull request.
+    name: ${{ matrix.name }}
     runs-on: windows-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        include:
+          - name: Unit tests
+            helper: false
+            python: false
+            native: false
+            command: |
+              go -C source test -trimpath ./...
+          - name: Static analysis
+            helper: false
+            python: false
+            native: false
+            command: |
+              go -C source vet ./...
+          - name: Launcher capability compatibility
+            helper: false
+            python: false
+            native: false
+            command: |
+              go -C source test -trimpath -count=1 -run 'Test(ReleasedAndFutureLauncherHandshake|OldLaunchersNeverReceiveNativeChartBlocks)$' -v
+          - name: Memory retention and cancellation
+            helper: false
+            python: false
+            native: false
+            command: |
+              go -C source test -trimpath -count=1 -run 'Test(AnalysisRetentionBudget|ScopeChangesRequireReplayAndReleaseUnusedTraces|BorrowedJournalBufferAndCancellation|UnchangedAnalysisDoesNotInvalidateEveryTick)$' -v
+          - name: No image generation
+            helper: false
+            python: false
+            native: false
+            command: |
+              go -C source test -trimpath -count=1 -run '^TestNativeViewsDoNotWriteChartFiles$' -v
+          - name: Live UDP - 2025 and 2026
+            helper: true
+            python: true
+            native: false
+            command: |
+              python source/integration_test.py
+          - name: Saved-session analysis
+            helper: true
+            python: true
+            native: false
+            command: |
+              python source/analysis_integration_test.py
+          - name: Helper lifecycle and UDP release
+            helper: true
+            python: true
+            native: false
+            command: |
+              python checks/lifecycle_check.py
+          - name: Package integrity and versions
+            helper: true
+            python: true
+            native: false
+            command: |
+              python source/package.py
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+              python checks/package_check.py --check integrity
+          - name: Privacy - source and ZIP
+            helper: true
+            python: true
+            native: false
+            command: |
+              python source/package.py
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+              python checks/package_check.py --check privacy
+          - name: Native chart API - Swofty 1.9.55
+            helper: false
+            python: false
+            native: true
+            command: |
+              New-Item -ItemType Directory -Force .verify | Out-Null
+              $env:UDP_TELEMETRY_NATIVE_VIEWS = Join-Path (Get-Location) '.verify/native-views.jsonl'
+              go -C source test -trimpath -count=1 -run '^TestNativeViewsDoNotWriteChartFiles$' -v
     env:
       CGO_ENABLED: '0'
     steps:
@@ -24,20 +107,31 @@ jobs:
           go-version-file: source/go.mod
           cache: false
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        if: matrix.python
         with:
           python-version: '3.14'
       - name: Build Windows helper
+        if: matrix.helper
         working-directory: source
         run: go build -buildvcs=false -trimpath -ldflags '-s -w -H=windowsgui' -o ../bin/udp-telemetry.exe .
-      - name: Go tests
-        working-directory: source
-        run: go test ./...
-      - name: Go vet
-        working-directory: source
-        run: go vet ./...
-      - name: Live UDP protocol integration
-        run: python source/integration_test.py
-      - name: Saved analysis integration
-        run: python source/analysis_integration_test.py
-      - name: Verify installable packages
-        run: python source/package.py
+      - name: Run check
+        run: ${{ matrix.command }}
+      - name: Check out the released Swofty 1.9.55 API
+        if: matrix.native
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: Swofty-Developments/SwoftyLauncher
+          ref: e69f4d905c404a2615412c1060fdfa2e4b716653
+          path: .verify/launcher
+          persist-credentials: false
+      - name: Install Rust required by the pinned launcher
+        if: matrix.native
+        run: |
+          rustup toolchain install 1.95.0 --profile minimal
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Validate against the actual launcher API
+        if: matrix.native
+        run: |
+          New-Item -ItemType Directory -Force .verify/launcher/packages/addon-api/examples | Out-Null
+          Copy-Item checks/native_api.rs .verify/launcher/packages/addon-api/examples/telemetry_contract.rs
+          cargo +1.95.0 run --locked --manifest-path .verify/launcher/Cargo.toml -p swofty-addon --example telemetry_contract -- .verify/native-views.jsonl

@@ -5,6 +5,7 @@ package main
 // after an interrupted write. This also permits correcting the decoder later.
 import (
 	"compress/gzip"
+	"context"
 	"crypto/rand"
 	"encoding/binary"
 	"encoding/hex"
@@ -425,6 +426,13 @@ func (r *Recorder) rename(id, name string) error {
 	return nil
 }
 func readJournal(path string, accept func([]byte)) (bool, error) {
+	return readJournalContext(context.Background(), path, false, accept)
+}
+
+// Analysis consumes packets synchronously and copies any pending frame. Its
+// borrowed mode reuses one bounded packet buffer instead of allocating a new
+// packet for every datagram. Other callers retain the original owned contract.
+func readJournalContext(ctx context.Context, path string, borrow bool, accept func([]byte)) (bool, error) {
 	f, e := os.Open(path)
 	if e != nil {
 		return false, e
@@ -435,7 +443,11 @@ func readJournal(path string, accept func([]byte)) (bool, error) {
 		return true, e
 	}
 	defer z.Close()
+	var buffer [8192]byte
 	for {
+		if e := ctx.Err(); e != nil {
+			return false, e
+		}
 		var n [2]byte
 		_, e = io.ReadFull(z, n[:])
 		if e == io.EOF {
@@ -448,7 +460,12 @@ func readJournal(path string, accept func([]byte)) (bool, error) {
 		if size < 29 || size > 8192 {
 			return true, fmt.Errorf("invalid journal record size")
 		}
-		b := make([]byte, size)
+		var b []byte
+		if borrow {
+			b = buffer[:size]
+		} else {
+			b = make([]byte, size)
+		}
 		if _, e = io.ReadFull(z, b); e != nil {
 			return true, nil
 		}

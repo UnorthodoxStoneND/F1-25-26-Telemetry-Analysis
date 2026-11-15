@@ -39,7 +39,7 @@ func wireNodes(value any, key string) []map[string]any {
 func TestRaceV3TabsSharedSelectionAndOverview(t *testing.T) {
 	a := analysisFixture(15)
 	a.data = t.TempDir()
-	a.displayCache = filepath.Join(a.data, "launcher-cache")
+
 	a.analysis.Tab = "traces"
 	view := a.analysisView()
 	tabs := wireNodes(view, "tabs")[0]["items"].([]any)
@@ -53,9 +53,9 @@ func TestRaceV3TabsSharedSelectionAndOverview(t *testing.T) {
 	if len(a.selectedRaceDrivers(a.analysis.Model)) != 1 || a.analysis.RaceDrivers != 1 {
 		t.Fatal("default was not the player")
 	}
-	images := wireNodes(view, "image")
-	if len(images) != 7 {
-		t.Fatal("expected summary, legend and five separate graphics", len(images))
+	charts := wireNodes(view, "chart")
+	if len(charts) != 5 {
+		t.Fatal("expected five separate native graphics", len(charts))
 	}
 	grids := wireNodes(view, "grid")
 	if len(grids) != 1 || !reflect.DeepEqual(grids[0]["columns"], []any{float64(3), float64(2)}) {
@@ -78,14 +78,11 @@ func TestRaceV3TabsSharedSelectionAndOverview(t *testing.T) {
 		if a.analysis.RaceDrivers != 13 {
 			t.Fatal("tab reset selection", tab)
 		}
-		for _, im := range wireNodes(view, "image") {
-			path := im["path"].(string)
-			if !strings.HasPrefix(path, a.displayCache+string(os.PathSeparator)) {
-				t.Fatal("launcher rejects image", path)
-			}
-			if _, e := os.Stat(path); e != nil {
-				t.Fatal(e)
-			}
+		if len(wireNodes(view, "image")) != 0 {
+			t.Fatal("analysis generated an image", tab)
+		}
+		if len(wireNodes(view, "chart")) == 0 {
+			t.Fatal("native charts missing", tab)
 		}
 	}
 	a.raceSelectionEvent("analysis-race-none", "", nil, nil)
@@ -314,7 +311,7 @@ func TestRaceV3ReplayFromEnvironment(t *testing.T) {
 	if n != 1 || math.Abs(avg-17.733) > .001 {
 		t.Fatal("BROWNING full pit-lane mean", avg, n)
 	}
-	a := App{data: out, displayCache: filepath.Join(out, "launcher-cache"), rec: &Recorder{items: []RecordingMeta{meta}}, analysis: AnalysisSelection{Model: m, RaceSelectionSession: meta.ID, RaceDrivers: (1 << 23) | (1 << 1) | (1 << 6), RaceLap: 10}}
+	a := App{data: out, rec: &Recorder{items: []RecordingMeta{meta}}, analysis: AnalysisSelection{Model: m, RaceSelectionSession: meta.ID, RaceDrivers: (1 << 23) | (1 << 1) | (1 << 6), RaceLap: 10}}
 	for _, tab := range []string{"stats", "traces", "tyres", "positions", "progression"} {
 		a.analysis.Tab = tab
 		view := a.analysisView()

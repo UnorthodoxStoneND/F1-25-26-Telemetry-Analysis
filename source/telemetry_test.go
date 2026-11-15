@@ -213,7 +213,7 @@ func TestPacketValidationAndReordering(t *testing.T) {
 	}
 }
 func TestViewAveragePrivacyAndSetups(t *testing.T) {
-	a := App{enabled: true, prefs: Preferences{Mode: "full", Port: 20777}, assets: t.TempDir()}
+	a := App{enabled: true, prefs: Preferences{Mode: "full", Port: 20777}}
 	a.tel.Active = true
 	a.tel.Player = 0
 	a.tel.Cars[0] = Car{Name: "Player", Participant: true, Position: 1, HasWear: true, Wear: [4]float64{10, 20, 30, 40}, HasStatus: true, Compound: 18, Visual: 16, Setup: make([]byte, 50)}
@@ -237,9 +237,6 @@ func TestViewAveragePrivacyAndSetups(t *testing.T) {
 	}
 	if len(setupDetail(a.tel.Cars[0])[0]["table"].(M)["rows"].([][]string)) != 11 {
 		t.Fatal("setup missing")
-	}
-	if err := makePills(a.assets); err != nil {
-		t.Fatal(err)
 	}
 }
 func TestFlashbackClearsBest(t *testing.T) {

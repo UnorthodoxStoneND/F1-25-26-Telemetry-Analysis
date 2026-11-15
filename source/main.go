@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-const addonVersion = "0.3.9"
+const addonVersion = "0.4.0"
 
 type Preferences struct {
 	Mode      string `json:"mode"`
@@ -25,9 +25,9 @@ type App struct {
 	mu                              sync.Mutex
 	tel                             Telemetry
 	prefs                           Preferences
-	data, assets                    string
+	data                            string
 	launcherData                    string
-	displayCache                    string
+	launcherKnown, nativeCharts     bool
 	enabled, gameKnown, gameRunning bool
 	listenErr                       string
 	conn                            *net.UDPConn
@@ -108,6 +108,9 @@ func (a *App) listen() {
 func (a *App) close() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	if a.analysis.Cancel != nil {
+		a.analysis.Cancel()
+	}
 	if a.done != nil {
 		close(a.done)
 		a.done = nil
@@ -351,10 +354,12 @@ func run(in io.Reader, out io.Writer) error {
 		switch msg.Method {
 		case "hello":
 			var p struct {
-				API     int             `json:"api"`
-				Data    string          `json:"data_dir"`
-				Cache   string          `json:"cache_dir"`
-				Profile json.RawMessage `json:"profile"`
+				API          int             `json:"api"`
+				Data         string          `json:"data_dir"`
+				Cache        string          `json:"cache_dir"`
+				Profile      json.RawMessage `json:"profile"`
+				Launcher     string          `json:"launcher"`
+				Capabilities []string        `json:"capabilities"`
 			}
 			if err = json.Unmarshal(msg.Params, &p); err == nil {
 				if p.API != 1 || p.Data == "" {
@@ -362,11 +367,7 @@ func run(in io.Reader, out io.Writer) error {
 					break
 				}
 				a.launcherData = p.Data
-				cache := p.Cache
-				if cache == "" {
-					cache = p.Data
-				}
-				a.displayCache = filepath.Join(cache, "telemetry-display-v1")
+				a.launcherKnown, a.nativeCharts = true, nativeChartsSupported(p.Capabilities)
 				a.data, err = prepareStorage(p.Data)
 				if err != nil {
 					break
@@ -377,7 +378,6 @@ func run(in io.Reader, out io.Writer) error {
 						a.prefs = prefs
 					}
 				}
-				a.assets = filepath.Join(a.data, "pills-v0.1")
 				a.rec, err = openRecorder(a.data)
 				if err != nil {
 					a.recordingErr = err.Error()
@@ -410,9 +410,6 @@ func run(in io.Reader, out io.Writer) error {
 					}()
 				}
 				a.savedPort = a.prefs.Port
-				if err = makePills(a.assets); err != nil {
-					break
-				}
 				a.profile(p.Profile)
 				a.syncOptions()
 				ready = true
@@ -445,7 +442,7 @@ func run(in io.Reader, out io.Writer) error {
 				} else {
 					result = a.telemetryView()
 				}
-			} else {
+			} else if p.Section != "analysis" || a.analysisNeedsInvalidate() {
 				a.send(M{"method": "invalidate", "params": M{"section": p.Section}})
 			}
 		case "event":
@@ -453,7 +450,7 @@ func run(in io.Reader, out io.Writer) error {
 		case "summary":
 			result = M{"label": "UDP TELEMETRY", "items": []string{"v" + addonVersion + " · 2025 / 2026"}}
 		case "build":
-			result = M{"ops": []any{}, "lines": []string{"UDP Telemetry v0.2 preview: launcher pages and local UDP recordings; enable UDP in the game."}, "warnings": []any{}}
+			result = M{"ops": []any{}, "lines": []string{"UDP Telemetry v" + addonVersion + ": launcher pages and local UDP recordings; enable UDP in the game."}, "warnings": []any{}}
 		default:
 			err = fmt.Errorf("unsupported launcher method %q", msg.Method)
 		}
