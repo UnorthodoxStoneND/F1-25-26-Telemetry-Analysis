@@ -18,6 +18,8 @@ for file in (root/'source').glob('*.go'):
 native=(root/'native/telemetry.cpp').read_text(encoding='utf-8')
 assert 'Car_Tyre_UpdateWear' not in native
 assert 'WriteProcessMemory' not in native and 'CreateThread' not in native and 'CreateFileW(' not in native
-assert 'verified_layout()' in native and '1789118616' in native
+builds=(root/'native/builds.h').read_text(encoding='utf-8')
+assert 'verified_layout()' in native and '1789118616' in builds and '1794312636' in builds
+assert 'SwoftyCoreLive' not in native and 'resolve_binding(' in native
 assert 'Sess_LapTimes_GetCarData' in native and 'Sess_LapTimes_ReportNewLapTime' in native
 print('PASS: live-only manifest, launcher settings, no network receiver/recorder/images or wear-function hook')

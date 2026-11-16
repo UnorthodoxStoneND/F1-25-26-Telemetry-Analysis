@@ -10,19 +10,21 @@
 #include <map>
 #include <string>
 #include <vector>
+#include "binding_fixture.h"
+#include "builds.h"
 namespace {
 void(*load)();SwoftyFrameFn frame;
 std::map<std::string,SwoftyEventFn> subscribers;
 bool verified=false;
 unsigned char pe[4096]{};
-uint64_t table[32]{};
+std::unique_ptr<BindingFixture> fixture;
 void*(*get_lap)(void*,uint8_t);
 uint64_t(*report_lap)(void*,void*);
 void* get_original(void* self,uint8_t id){assert(self && id==12);return reinterpret_cast<void*>(0x12345678);}
 uint64_t report_original(void* self,void* message){assert(self && message==reinterpret_cast<void*>(0x1234));return 0xdeadbeef12345678ull;}
 void log(const char*,...){}
 uintptr_t base(){return verified?reinterpret_cast<uintptr_t>(pe):reinterpret_cast<uintptr_t>(GetModuleHandleW(nullptr));}
-uintptr_t resolve(const char* name){return !std::strcmp(name,"g_Sess_VehicleTable")?reinterpret_cast<uintptr_t>(table):0;}
+uintptr_t resolve(const char* name){return fixture?fixture->resolve(name):0;}
 int mixins(const SwoftyMixin* list,size_t count){for(size_t i=0;i<count;i++) {
  if(list[i].kind==SWOFTY_MIXIN_ON_LOAD)load=reinterpret_cast<void(*)()>(list[i].handler);
  else if(!std::strcmp(list[i].target,"Sess_LapTimes_GetCarData")){get_lap=reinterpret_cast<decltype(get_lap)>(list[i].handler);*list[i].orig=reinterpret_cast<void*>(get_original);}
@@ -37,8 +39,10 @@ void emit(const char* name){SwoftyEvent e{};e.name=name;assert(subscribers.count
 int main(int argc,char** argv){
     assert(argc==3||argc==4);verified=argc==4;
     auto dos=reinterpret_cast<IMAGE_DOS_HEADER*>(pe);dos->e_magic=IMAGE_DOS_SIGNATURE;dos->e_lfanew=0x80;
-    auto nt=reinterpret_cast<IMAGE_NT_HEADERS64*>(pe+0x80);nt->Signature=IMAGE_NT_SIGNATURE;nt->FileHeader.Machine=IMAGE_FILE_MACHINE_AMD64;nt->FileHeader.TimeDateStamp=1789118616u;
+    auto nt=reinterpret_cast<IMAGE_NT_HEADERS64*>(pe+0x80);nt->Signature=IMAGE_NT_SIGNATURE;nt->FileHeader.Machine=IMAGE_FILE_MACHINE_AMD64;nt->FileHeader.TimeDateStamp=argc==4&&!std::strcmp(argv[3],"current")?builds::CURRENT_STEAM:builds::ORIGINAL_STEAM;
     auto core=LoadLibraryA(argv[1]);assert(core);
+    assert(!GetProcAddress(core,"SwoftyCoreLive")); // The separate snapshot service is completely absent.
+    if(verified) fixture=std::make_unique<BindingFixture>(24);
     auto dll=LoadLibraryA(argv[2]);assert(dll);
     auto init=reinterpret_cast<SwoftyAddonInitFn>(GetProcAddress(dll,"SwoftyAddonInit"));assert(init);
     SwoftyEvents events={available,subscribe,on_frame,nullptr};SwoftyApi api{};
@@ -55,11 +59,12 @@ int main(int argc,char** argv){
     wchar_t name[96];swprintf_s(name,L"Local\\USTelemetryLive-1-%lu",GetCurrentProcessId());
     auto handle=OpenFileMappingW(FILE_MAP_READ,FALSE,name);assert(handle);
     auto view=static_cast<const livewire::Frame*>(MapViewOfFile(handle,FILE_MAP_READ,0,0,sizeof(livewire::Frame)));assert(view);
-    frame(.2,nullptr);assert(view->count==24 && view->player==12 && view->size==9216 && !(view->sequence&1));
-    assert(view->state&livewire::ACTIVE);assert(bool(view->state&livewire::DIRECT_READY)==verified);
+    frame(.2,nullptr);assert(view->size==9216 && !(view->sequence&1));
+    if(!verified) {assert(!view->count && view->diagnostic[0]);UnmapViewOfFile(view);CloseHandle(handle);FreeLibrary(dll);FreeLibrary(core);std::cout<<"PASS: unsupported build is reported instead of an indefinite waiting message\n";return 0;}
+    assert(view->count==24 && view->player==12 && (view->state&livewire::ACTIVE) && (view->state&livewire::DIRECT_READY));
     if(verified) assert(view->cars[12].last_ms==92000 && view->cars[12].best_ms==92000);
-    assert(view->cars[0].position==1 && !std::strcmp(view->cars[0].name,"Mock Driver 1"));
-    assert(view->cars[0].wear_known==0 && view->cars[0].setup_known==0);
+    assert(view->cars[0].position==1 && !std::strcmp(view->cars[0].name,"Driver 1"));
+    assert(view->cars[0].wear_known==15 && view->cars[0].setup_known==(1u<<21)-1);
     emit("pause");assert(view->state&livewire::PAUSED && view->count==24);
     emit("resume");assert(!(view->state&livewire::PAUSED));
     auto session=view->session;emit("session.end");assert(view->count==0 && view->session>session && (view->state&livewire::ENDED));
@@ -67,5 +72,5 @@ int main(int argc,char** argv){
     emit("session.start");Sleep(210);frame(.2,nullptr);assert(view->count==24);
     emit("session.unload");assert(!view->count);
     UnmapViewOfFile(view);CloseHandle(handle);FreeLibrary(dll);FreeLibrary(core);
-    std::cout<<"PASS: real native DLL, mocked core, 24 grid cars, pause, end/unload/restart; "<<(verified?"timing hooks preserve arguments and results":"unsupported-build fallback")<<"\n";
+    std::cout<<"PASS: real DLL, bindings-only core without snapshot export, 24-car grid, timing hooks, pause and end/start for build "<<nt->FileHeader.TimeDateStamp<<"\n";
 }

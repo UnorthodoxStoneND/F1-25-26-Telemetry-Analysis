@@ -247,6 +247,21 @@ func TestSharedMemoryAndProcessLifecycle(t *testing.T) {
 	if e != nil || len(f.Cars) != 1 {
 		t.Fatal("read-only mapping failed", e)
 	}
+	// The actual helper refresh path must not disguise a reader failure as waiting.
+	bad := fixture()
+	binary.LittleEndian.PutUint32(bad[40:], 0)
+	copy(bad[64:256], "Game binding unavailable: vehicle table.")
+	write(address, bad)
+	a := App{reader: r, enabled: true}
+	a.refresh()
+	if a.status != "Live data unavailable" || a.frame.Diagnostic == "" {
+		t.Fatal("binding failure hidden behind waiting status")
+	}
+	viewBytes, _ := json.Marshal(a.view())
+	if !bytes.Contains(viewBytes, []byte("Game binding unavailable")) {
+		t.Fatal("diagnostic missing from live page")
+	}
+	write(address, fixture())
 	sequence := make([]byte, 8)
 	sequence[0] = 1
 	write(address+16, sequence)

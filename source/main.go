@@ -99,10 +99,15 @@ func (a *App) refresh() {
 	}
 	a.frame = f
 	a.status = "Live"
+	if f.State&64 != 0 {
+		a.status = "No new game values · retained"
+	}
 	if f.State&active == 0 {
 		a.status = "Waiting for a session"
 		if f.State&32 != 0 {
 			a.status = "Session ended"
+		} else if f.Diagnostic != "" {
+			a.status = "Live data unavailable"
 		}
 		a.expanded = ""
 	} else if f.State&paused != 0 {

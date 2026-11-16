@@ -4,7 +4,7 @@
   "name": "F1 Live Telemetry",
   "version": "0.5.0",
   "author": "UnorthodoxStoneNDmodding",
-  "description": "Live driver positions, tyres, wear, lap times and car setups, read through Swofty and the game engine. Live display only; no UDP or recording.",
+  "description": "Live driver positions, tyres, wear, lap times and car setups, read from the game through Swofty's binding system. Live display only; no UDP or recording.",
   "license": "MIT",
   "repository": "https://github.com/UnorthodoxStoneND/F1-25-26-Telemetry-Analysis",
   "category": "utility",

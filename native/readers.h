@@ -5,7 +5,7 @@
 #include <cstring>
 #include <limits>
 
-// Read-only layouts for the verified Steam game build (PE timestamp 1789118616).
+// Read-only layouts for the inspected Steam builds listed in builds.h.
 // Offsets and value meanings: upstream re/db/structs and native lap readers.
 // These readers are independently implemented; no Swofty core source is bundled.
 namespace readers {

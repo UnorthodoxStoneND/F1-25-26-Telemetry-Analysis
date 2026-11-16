@@ -66,7 +66,7 @@ jobs:
               python source/package.py
               if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
               python checks/package_check.py --check privacy
-          - name: Native live API - Swofty 1.9.55
+          - name: Native binding API - Swofty 1.9.55
             native: true
             command: |
               New-Item -ItemType Directory -Force .verify | Out-Null

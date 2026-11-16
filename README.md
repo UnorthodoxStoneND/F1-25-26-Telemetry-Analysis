@@ -2,7 +2,7 @@
 
 ## Description
 
-**v0.5.0 is live display only.** View current driver positions, tyres, wear, lap times and car setups inside Swofty. This version replaces the UDP receiver with Swofty's live API and read-only game-engine readers. It contains no session recorder or Telemetry Analysis page.
+**v0.5.0 is live display only.** View current driver positions, tyres, wear, lap times and car setups inside Swofty. This version replaces the UDP receiver with read-only game-engine readers using Swofty's named binding system and session callbacks. It contains no session recorder or Telemetry Analysis page.
 
 ## Features
 
@@ -25,7 +25,7 @@ No game UDP settings or port configuration are needed. Grid and garage values ap
 
 ### Processes and local files
 
-Swofty starts **`telemetry-live.exe`**, a small background helper with no separate window. It communicates with Swofty through local input/output pipes. Swofty loads **`telemetry-live.dll`** inside the game using its normal native add-on system. The DLL reads current game state and observes two existing lap-timing functions without changing their arguments or results. It does not change car settings or game files.
+Swofty starts **`telemetry-live.exe`**, a small background helper with no separate window. It communicates with Swofty through local input/output pipes. Swofty loads **`telemetry-live.dll`** inside the game using its normal native add-on system. The DLL resolves named game bindings through Swofty, reads the current objects and observes two existing lap-timing functions without changing their arguments or results. It does not depend on the separate `SwoftyCoreLive` snapshot service and does not change car settings or game files.
 
 The DLL publishes a fixed **9 KiB shared-memory snapshot** in Windows. The helper opens it read-only and displays the latest values. There is no network listener, web server, separate recording process, Python runtime or installed Windows service. The add-on retains current values and a small timing cache, rather than recording a session history.
 
@@ -36,7 +36,7 @@ v0.5.0 writes no telemetry files, images or settings of its own. Swofty manages 
 ## Supported platforms
 
 - **Operating system:** Windows x64.
-- **Launcher:** Swofty 1.9.55 and compatible later versions retaining launcher API 1 and native live API v2. No maximum launcher version is imposed; future breaking API changes may require an update.
-- **Game:** F1 25 on Steam, including the 2026 Season Pack and My Team. Direct wear/setup/timing readers are gated to the inspected Steam executable layout (PE timestamp `1789118616`). Other game builds can display supported Swofty fields, with unsupported readings left unavailable.
+- **Launcher:** Swofty 1.9.55 and compatible later versions retaining launcher API 1, native binding API 9, session callbacks and memory-check API 1. No maximum launcher version is imposed; future breaking API changes may require an update.
+- **Game:** F1 25 on Steam, including the 2026 Season Pack and My Team. Object readers support the inspected Steam layouts with PE timestamps `1789118616` and `1794312636`. Swofty resolves the addresses for the running build; object ownership, vehicle identity and vector bounds are checked before values are shown. Unsupported builds or missing bindings produce an explicit message.
 
-The native component and helper have automated host tests. In-game verification of this new acquisition path is still required before release.
+The native component and helper have automated host tests, including a core with no snapshot-service export. The current executable's timing and driver-name access paths were inspected statically; in-game verification of this corrected acquisition path is still required before release.
