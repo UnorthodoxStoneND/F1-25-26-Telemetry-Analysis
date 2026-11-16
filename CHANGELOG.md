@@ -1,5 +1,12 @@
 # UDP Telemetry changelog
 
+## 0.4.1 — 16 November 2026
+
+- Rebuild the verified v0.4.0 UDP telemetry and analysis add-on with an updated stable Go toolchain.
+- Keep telemetry, recording, analysis and read-only team-name behavior unchanged.
+- Retain source, reproducible build settings and release checksums for verification.
+- This maintenance rebuild does not guarantee that third-party antivirus detections will clear.
+
 ## 0.4.0 — 15 November 2026
 
 - Replace generated analysis images with Swofty's native chart controls across practice, qualifying, sprint qualifying, races and sprints. Retain the existing results, analysis tabs and shared driver selections.

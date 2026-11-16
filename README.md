@@ -16,8 +16,8 @@ Live telemetry and post-session analysis for F1 25 and the 2026 Season Pack, inc
 
 ## Install guide
 
-1. Download **`UDP_Telemetry_v0.4.0.zip`** from [GitHub Releases](https://github.com/UnorthodoxStoneND/F1-25-26-Telemetry-Analysis/releases/latest). Choose the named ZIP, rather than GitHub's automatic **Source code** download. The add-on is not currently listed in Swofty's Addon Browser.
-2. In Swofty, open **Addons → Install addon from computer** and select the downloaded file.
+1. Download **`UDP_Telemetry_v0.4.1.zip`** from [GitHub Releases](https://github.com/UnorthodoxStoneND/F1-25-26-Telemetry-Analysis/releases/latest). Choose the named ZIP, rather than GitHub's automatic **Source code** download. The add-on is not currently listed in Swofty's Addon Browser.
+2. In Swofty, open **Addons â†’ Install addon from computer** and select the downloaded file.
 3. Enable **UDP Telemetry** in your active profile, then restart Swofty.
 4. In the game, open **Telemetry Settings** and use these settings:
 
@@ -42,10 +42,28 @@ The same helper also captures actual team names, including custom My Team names.
 
 The helper exits when Swofty closes or shuts down the add-on, including when its launcher communication pipe closes. Disabling the add-on in a profile closes the UDP listener and finalises the current recording; Swofty may keep the helper process loaded. Ending a game session finalises that recording but leaves the helper available for the next session. Closing the game alone does not close the helper while Swofty remains open.
 
-Recordings, session metadata, captured team-name snapshots, save associations and settings are saved locally in **Documents/F1 Game Telemetry**, respecting Windows' redirected Documents folder. Existing recordings remain readable. Older versions' image files may remain on disk, but v0.4.0 does not use or regenerate them. The helper does not upload recordings or team names.
+Recordings, session metadata, captured team-name snapshots, save associations and settings are saved locally in **Documents/F1 Game Telemetry**, respecting Windows' redirected Documents folder. Existing recordings remain readable. Older versions' image files may remain on disk, but v0.4.1 does not use or regenerate them. The helper does not upload recordings or team names.
+
+## Antivirus notice
+
+Some engines flagged the previous v0.4.0 helper. We reproduced that executable from source and investigated its sandbox warnings, which included normal Go metadata, Windows system DLL loads and certificate-check traffic. Version 0.4.1 rebuilds the same features with Go 1.27.4. A compiler update does not guarantee that antivirus detections will clear; the previous VirusTotal report does not cover this new executable. Keep antivirus protection enabled.
 
 ## Supported platforms
 
 - **Operating system:** Windows x64.
 - **Launcher:** Swofty Launcher 1.9.55 or newer with the `view.chart` capability. Future versions are supported while they retain the compatible add-on API and chart capability.
 - **Game:** F1 25 on Steam, including the 2026 Season Pack and My Team.
+
+## Build from source
+
+Use Go **1.27.4** for this maintenance release. From the `source` directory, build with:
+
+```powershell
+$env:CGO_ENABLED = "0"
+$env:GOOS = "windows"
+$env:GOARCH = "amd64"
+$env:GOAMD64 = "v1"
+go build -buildvcs=false -trimpath -ldflags "-s -w -H=windowsgui" -o ../bin/udp-telemetry.exe .
+```
+
+Run `python source/package.py` from the add-on root to create the installable ZIP. The build has no third-party Go module dependencies.
