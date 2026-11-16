@@ -16,7 +16,7 @@ Live telemetry and post-session analysis for F1 25 and the 2026 Season Pack, inc
 
 ## Install guide
 
-1. Download **`UDP_Telemetry_v0.4.1.zip`** from [GitHub Releases](https://github.com/UnorthodoxStoneND/F1-25-26-Telemetry-Analysis/releases/latest). Choose the named ZIP, rather than GitHub's automatic **Source code** download. The add-on is not currently listed in Swofty's Addon Browser.
+1. Download **`UDP_Telemetry_v0.4.2.zip`** from [GitHub Releases](https://github.com/UnorthodoxStoneND/F1-25-26-Telemetry-Analysis/releases/latest). Choose the named ZIP, rather than GitHub's automatic **Source code** download. The add-on is not currently listed in Swofty's Addon Browser.
 2. In Swofty, open **Addons â†’ Install addon from computer** and select the downloaded file.
 3. Enable **UDP Telemetry** in your active profile, then restart Swofty.
 4. In the game, open **Telemetry Settings** and use these settings:
@@ -46,7 +46,7 @@ Recordings, session metadata, captured team-name snapshots, save associations an
 
 ## Antivirus notice
 
-Some engines flagged the previous v0.4.0 helper. We reproduced that executable from source and investigated its sandbox warnings, which included normal Go metadata, Windows system DLL loads and certificate-check traffic. Version 0.4.1 rebuilds the same features with Go 1.27.4. A compiler update does not guarantee that antivirus detections will clear; the previous VirusTotal report does not cover this new executable. Keep antivirus protection enabled.
+Version 0.4.2 retains standard Go symbols and debug information to make the executable easier to inspect. Its [VirusTotal executable scan](https://www.virustotal.com/gui/file/71bc932a48d92174b3417831e3ccc4c0b80402b8961bfe9b949774752e58fab7) reports 1/71 detections on 16 November 2026: Bkav flags it; CrowdStrike is Undetected. Both engines also flagged an [empty Go program](https://www.virustotal.com/gui/file/3799849f63f8d96c58cf75e7245a3a76c3f9855176cffaf2d991bc86d840986d) built with our previous settings, supporting our assessment that these are false positives. This does not guarantee future scan results. Keep antivirus protection enabled.
 
 ## Supported platforms
 
@@ -63,7 +63,7 @@ $env:CGO_ENABLED = "0"
 $env:GOOS = "windows"
 $env:GOARCH = "amd64"
 $env:GOAMD64 = "v1"
-go build -buildvcs=false -trimpath -ldflags "-s -w -H=windowsgui" -o ../bin/udp-telemetry.exe .
+go build -buildvcs=false -trimpath -ldflags "-H=windowsgui" -o ../bin/udp-telemetry.exe .
 ```
 
-Run `python source/package.py` from the add-on root to create the installable ZIP. The build has no third-party Go module dependencies.
+Symbols and DWARF debug information are retained; `-trimpath` removes local build paths. The GUI subsystem keeps the helper's existing background window behavior. Run `python source/package.py` from the add-on root to create the installable ZIP. The build has no third-party Go module dependencies.

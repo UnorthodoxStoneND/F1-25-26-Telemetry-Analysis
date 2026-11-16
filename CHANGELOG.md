@@ -1,5 +1,11 @@
 # UDP Telemetry changelog
 
+## 0.4.2 — 16 November 2026
+
+- Retain standard Go symbols and DWARF debug information by removing the `-s -w` linker flags. Keep Go 1.27.4, path trimming and the Windows GUI subsystem.
+- Keep telemetry, recording, analysis and read-only team-name behavior unchanged.
+- Record controlled build comparisons: retaining debug information clears CrowdStrike in both the empty control and the full 0.4.2 helper. Bkav still flags the helper; complete antivirus clearance is not claimed.
+
 ## 0.4.1 — 16 November 2026
 
 - Rebuild the verified v0.4.0 UDP telemetry and analysis add-on with an updated stable Go toolchain.

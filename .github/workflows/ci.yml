@@ -113,7 +113,7 @@ jobs:
       - name: Build Windows helper
         if: matrix.helper
         working-directory: source
-        run: go build -buildvcs=false -trimpath -ldflags '-s -w -H=windowsgui' -o ../bin/udp-telemetry.exe .
+        run: go build -buildvcs=false -trimpath -ldflags '-H=windowsgui' -o ../bin/udp-telemetry.exe .
       - name: Run check
         run: ${{ matrix.command }}
       - name: Check out the released Swofty 1.9.55 API

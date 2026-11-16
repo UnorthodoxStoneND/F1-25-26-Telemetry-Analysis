@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-const addonVersion = "0.4.1"
+const addonVersion = "0.4.2"
 
 type Preferences struct {
 	Mode      string `json:"mode"`

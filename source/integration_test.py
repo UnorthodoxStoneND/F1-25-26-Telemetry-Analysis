@@ -153,7 +153,7 @@ def main():
                     view = call('view', {'section': 'telemetry'})
                     check_view(view, (data_dir, cache_dir))
                     rows = table(view)['rows']
-                    assert len(rows) == 5
+                    assert len(rows) == 5, {'format': fmt, 'rows': len(rows), 'view': view}
                     tyre = rows[0]['cells'][2]
                     assert tyre['text'] == 'C3' and 'image' not in tyre
                     assert tyre['edit']['colour'] == {'value': '#FF4A5B', 'disabled': True}
