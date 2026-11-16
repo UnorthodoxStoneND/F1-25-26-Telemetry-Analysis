@@ -2,6 +2,7 @@
 
 ## 0.5.0 — 16 November 2026
 
+- Correct Last/Best Lap showing an advancing counter while cars are in the garage. Accept a lap only when all three sector times are present and add up to its total; unfinished counters leave the columns unavailable or retain the previous completed lap. Invalid completed laps update Last without becoming Best.
 - Correct the test build's empty live display: use Swofty's named binding system directly for session vehicles, classification, driver names, compounds and controllers, without depending on the separate live snapshot service. Include the inspected current Steam layout (`1794312636`) and explicit diagnostics for unsupported layouts, missing bindings and failed object checks.
 - Make this version live display only. Remove the recorder, analysis pages, UDP port setting and None display mode. Existing saved data is left untouched.
 - Replace the UDP receiver with a native add-on using Swofty's resolved game bindings for read-only live values and official lap timing. Publish a fixed 9 KiB shared-memory snapshot to the launcher helper.

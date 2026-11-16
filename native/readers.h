@@ -74,36 +74,52 @@ template<class R> bool protected_float(R& r,uint64_t at,float& out) {
     if(!read(r,at,value)||!read(r,at+8,key)) return false;
     value^=key; std::memcpy(&out,&value,4); return std::isfinite(out);
 }
+struct CompletedLap {
+    uint32_t ms=0;
+    bool valid=false;
+};
+inline bool same(const CompletedLap& a,const CompletedLap& b){return a.ms==b.ms&&a.valid==b.valid;}
+// A running counter is positive even in the garage. The game's fastest-lap
+// routine first requires all three sector times: the raw lap clock alone is
+// not evidence that a lap has finished. Apply a sector-total check as well.
+template<class R> CompletedLap completed_lap(R& r,uint64_t record) {
+    float seconds=0,sectors[3]{};
+    if(!protected_float(r,record+0xe8,seconds)||seconds<=5||seconds>=3600) return {};
+    for(unsigned i=0;i<3;i++)
+        if(!protected_float(r,record+0x48+16*i,sectors[i])||sectors[i]<=0||sectors[i]>=3600) return {};
+    if(std::fabs(double(sectors[0])+sectors[1]+sectors[2]-seconds)>.010) return {};
+    uint64_t bits=0;uint8_t key=0;
+    if(!read(r,record+0xe0,bits)||!read(r,record+0xd8,key)||key>1) return {};
+    return {uint32_t(seconds*1000.f),(bits&1)==key};
+}
 struct TimingCache {
-    uint64_t history=0,bits=0;
+    uint64_t history=0;
     unsigned index=0;
-    float tip=0;
-    uint8_t key=0;
+    CompletedLap tip{};
     uint32_t last=0,best=0,known=0;
 };
 template<class R> void timing(R& r,uint64_t system,unsigned car,livewire::Car& out,TimingCache* cache=nullptr) {
     if(!system || car>=livewire::CARS) return;
-    auto list=pointer(r,system+0x58); uint64_t end=0;
-    if(!list || !read(r,system+0x60,end) || end<list || (end-list)/8>64 || car>=(end-list)/8) return;
-    auto history=pointer(r,list+car*8); uint8_t current=0;
-    if(!history || !read(r,history+0x38,current) || current>=200) return;
-    float tip=0; uint64_t tip_bits=0; uint8_t tip_key=0;
-    auto at=history+200*current;
-    if(!protected_float(r,at+0xe8,tip)||!read(r,at+0xe0,tip_bits)||!read(r,at+0xd8,tip_key)) return;
-    if(cache && cache->history==history && cache->index==current && cache->tip==tip && cache->bits==tip_bits && cache->key==tip_key) {
+    auto list=pointer(r,system+0x58);uint64_t end=0;
+    if(!list||!read(r,system+0x60,end)||end<list||(end-list)%8||(end-list)/8>64||car>=(end-list)/8) return;
+    auto history=pointer(r,list+car*8);uint8_t current=0;
+    if(!history||!read(r,history+0x38,current)||current>=200) return;
+    auto tip=completed_lap(r,history+200*current);
+    // Changes in an unfinished counter do not invalidate completed timings.
+    if(cache&&cache->history==history&&cache->index==current&&same(cache->tip,tip)) {
         out.last_ms=cache->last;out.best_ms=cache->best;out.known|=cache->known;return;
     }
-    float last=0,best=std::numeric_limits<float>::infinity();
+    uint32_t last=0,best=0;
     for(unsigned lap=0;lap<=current;lap++) {
-        const uint64_t record=history+lap*200; float seconds=0;
-        if(!protected_float(r,record+0xe8,seconds) || seconds<=0 || seconds>=3600) continue;
-        last=seconds; uint64_t bits=0; uint8_t key=0;
-        if(read(r,record+0xe0,bits) && read(r,record+0xd8,key) && (bits&1)==key && seconds<best) best=seconds;
+        auto value=lap==current?tip:completed_lap(r,history+lap*200);
+        if(!value.ms) continue;
+        last=value.ms;
+        if(value.valid&&(!best||value.ms<best)) best=value.ms;
     }
     uint8_t after=0;
-    if(!read(r,history+0x38,after)||after!=current||pointer(r,list+car*8)!=history) return;
-    if(last>0) { out.last_ms=uint32_t(last*1000.f);out.known|=livewire::LAST; }
-    if(std::isfinite(best)) { out.best_ms=uint32_t(best*1000.f);out.known|=livewire::BEST; }
-    if(cache) *cache={history,tip_bits,current,tip,tip_key,out.last_ms,out.best_ms,out.known&(livewire::LAST|livewire::BEST)};
+    if(!read(r,history+0x38,after)||after!=current||pointer(r,list+car*8)!=history||!same(tip,completed_lap(r,history+200*current))) return;
+    uint32_t known=(last?livewire::LAST:0)|(best?livewire::BEST:0);
+    out.last_ms=last;out.best_ms=best;out.known|=known;
+    if(cache) *cache={history,current,tip,last,best,known};
 }
 }

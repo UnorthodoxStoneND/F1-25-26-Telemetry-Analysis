@@ -62,7 +62,10 @@ int main(int argc,char** argv){
     frame(.2,nullptr);assert(view->size==9216 && !(view->sequence&1));
     if(!verified) {assert(!view->count && view->diagnostic[0]);UnmapViewOfFile(view);CloseHandle(handle);FreeLibrary(dll);FreeLibrary(core);std::cout<<"PASS: unsupported build is reported instead of an indefinite waiting message\n";return 0;}
     assert(view->count==24 && view->player==12 && (view->state&livewire::ACTIVE) && (view->state&livewire::DIRECT_READY));
-    if(verified) assert(view->cars[12].last_ms==92000 && view->cars[12].best_ms==92000);
+    // These clocks run before a lap is completed, including in the garage.
+    assert(!(view->cars[12].known&(livewire::LAST|livewire::BEST)));
+    for(unsigned i=0;i<32;i++){float time=80.f+float(i);write(records[i]+0x48,20.f);write(records[i]+0x58,30.f);write(records[i]+0x68,time-50.f);}
+    Sleep(210);frame(.2,nullptr);assert(view->cars[12].last_ms==92000&&view->cars[12].best_ms==92000);
     assert(view->cars[0].position==1 && !std::strcmp(view->cars[0].name,"Driver 1"));
     assert(view->cars[0].wear_known==15 && view->cars[0].setup_known==(1u<<21)-1);
     emit("pause");assert(view->state&livewire::PAUSED && view->count==24);

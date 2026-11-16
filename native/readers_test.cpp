@@ -52,9 +52,29 @@ int main(int argc,char** argv) {
     m.block(system,0x100);m.block(list,32*8);m.put(system+0x58,list);m.put(system+0x60,list+32*8);
     for(unsigned id=0;id<32;id++) {
         uint64_t h=0xd00000+0x10000*id;m.block(h,0x1000);m.put(list+id*8,h);m.put(h+0x38,uint8_t(2));
-        for(unsigned lap=0;lap<3;lap++){auto rec=h+lap*200;m.xfloat(rec+0xe8,80.f+float(id)-float(lap));m.put(rec+0xe0,uint64_t(lap==2?1:0));m.put(rec+0xd8,uint8_t(0));}
+        for(unsigned lap=0;lap<3;lap++){auto rec=h+lap*200;float seconds=80.f+float(id)-float(lap);m.xfloat(rec+0xe8,seconds);m.xfloat(rec+0x48,20.f);m.xfloat(rec+0x58,30.f);m.xfloat(rec+0x68,seconds-50);m.put(rec+0xe0,uint64_t(lap==2?1:0));m.put(rec+0xd8,uint8_t(0));}
         c={};readers::timing(m,system,id,c);assert(c.last_ms==(78+id)*1000 && c.best_ms==(79+id)*1000);
         m.put(h+0x38,uint8_t(0));c={};readers::timing(m,system,id,c);assert(c.last_ms==(80+id)*1000 && c.best_ms==c.last_ms);
+    }
+    // Garage regression: everyone can have the same advancing raw clock. It
+    // must never become Last/Best, even with the default lap-valid bit set.
+    for(unsigned id=0;id<32;id++) {
+        auto h=uint64_t(0xd00000)+0x10000*id;readers::TimingCache cache{};
+        m.put(h+0x38,uint8_t(0));m.xfloat(h+0x48,0);m.xfloat(h+0x58,0);m.xfloat(h+0x68,0);
+        for(unsigned tick=0;tick<50;tick++){m.xfloat(h+0xe8,17.977f+float(tick));c={};readers::timing(m,system,id,c,&cache);assert(!(c.known&(livewire::LAST|livewire::BEST)));}
+        // Two sectors and a positive clock are still not a completed lap.
+        m.xfloat(h+0x48,20);m.xfloat(h+0x58,30);c={};readers::timing(m,system,id,c,&cache);assert(!c.last_ms&&!c.best_ms);
+        // First flying lap, then an unfinished next lap with a changing clock.
+        m.xfloat(h+0xe8,80);m.xfloat(h+0x68,30);c={};readers::timing(m,system,id,c,&cache);assert(c.last_ms==80000&&c.best_ms==80000);
+        m.put(h+0x38,uint8_t(1));auto next=h+200;m.xfloat(next+0x48,0);m.xfloat(next+0x58,0);m.xfloat(next+0x68,0);
+        for(unsigned tick=0;tick<50;tick++){m.xfloat(next+0xe8,float(tick));c={};readers::timing(m,system,id,c,&cache);assert(c.last_ms==80000&&c.best_ms==80000);}
+        // Completing an invalid lap updates Last while Best stays on the valid lap.
+        m.xfloat(next+0xe8,79);m.xfloat(next+0x48,20);m.xfloat(next+0x58,30);m.xfloat(next+0x68,29);m.put(next+0xe0,uint64_t(1));
+        c={};readers::timing(m,system,id,c,&cache);assert(c.last_ms==79000&&c.best_ms==80000);
+        // Inconsistent total, nonfinite sector, and a rewind cannot create a lap.
+        m.xfloat(next+0x68,1);assert(!readers::completed_lap(m,next).ms);
+        m.xfloat(next+0x68,std::numeric_limits<float>::quiet_NaN());assert(!readers::completed_lap(m,next).ms);
+        m.put(h+0x38,uint8_t(0));m.xfloat(h+0x48,0);c={};readers::timing(m,system,id,c,&cache);assert(!c.last_ms&&!c.best_ms);
     }
     livewire::Session life;life.frame.state=livewire::ACTIVE;life.frame.count=1;life.frame.player=0;
     life.event("pause");life.stamp(100);assert(life.frame.state&livewire::PAUSED && life.frame.count==1);
@@ -65,5 +85,5 @@ int main(int argc,char** argv) {
     life.frame.cars[0].vehicle=0;life.frame.cars[0].identity=1234;life.frame.cars[0].known=livewire::NAME|livewire::POSITION|livewire::TYRES;
     life.frame.cars[0].position=1;life.frame.cars[0].compound=18;life.frame.cars[0].visual=17;std::memcpy(life.frame.cars[0].name,"ABI Driver",11);life.stamp(12345);
     if(argc>1){std::ofstream out(argv[1],std::ios::binary);out.write(reinterpret_cast<const char*>(&life.frame),sizeof life.frame);assert(out.good());}
-    std::cout<<"PASS: all 32 drivers, partial wear, setup units, invalid laps, rewind, pause, end/start, 9216-byte ABI\n";
+    std::cout<<"PASS: 32-driver advancing garage counters rejected; complete/partial/invalid laps, rewind, wear/setup, lifecycle and ABI\n";
 }
