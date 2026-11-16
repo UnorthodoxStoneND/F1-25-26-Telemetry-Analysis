@@ -352,7 +352,7 @@ def exercise(folder):
                 assert any(f.get('id') == 'analysis-save' for f in nodes(helper.view(), 'form'))
                 helper.event('analysis-save', {'name': f'My Team {fmt}'})
                 assert not any(f.get('id') == 'analysis-save' for f in nodes(helper.view(), 'form'))
-                assert '0.4.0' in helper.view()['subtitle']
+                assert '0.4.1' in helper.view()['subtitle']
                 live = helper.call('view', {'section': 'telemetry'})
                 assert 'analysis-' not in json.dumps(live) and 'recording' not in json.dumps(live).lower()
                 print(f'PASS: {fmt} race tabs, five separate traces, timing side panel, shared multi-driver selection and all strategy/progression charts')
