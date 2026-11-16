@@ -1,5 +1,12 @@
-# UDP Telemetry changelog
+# F1 Telemetry changelog
 
+## 0.5.0 — 16 November 2026
+
+- Make this version live display only. Remove the recorder, analysis pages, UDP port setting and None display mode. Existing saved data is left untouched.
+- Replace the UDP receiver with Swofty's live API plus a native add-on for read-only wear, setup and official lap timing. Publish a fixed 9 KiB shared-memory snapshot to the launcher helper.
+- Retain full-grid/nearest-car selection, optional player highlighting, native tyre circles, four wear bars and average wear, last/best lap times, and setup cards beneath driver rows.
+- Retain paused values and clear the display on explicit session end/unload or game exit. Leave unavailable fields unknown; gate direct readers and timing hooks to the inspected Steam game layout.
+- Write no recordings or generated images. Document the helper process and in-game native DLL. In-game validation is still required before release.
 ## 0.4.0 — 15 November 2026
 
 - Replace generated analysis images with Swofty's native chart controls across practice, qualifying, sprint qualifying, races and sprints. Retain the existing results, analysis tabs and shared driver selections.

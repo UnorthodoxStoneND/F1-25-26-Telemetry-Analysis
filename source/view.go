@@ -2,73 +2,90 @@ package main
 
 import (
 	"fmt"
-	"time"
+	"sort"
 )
 
-type M = map[string]any
-
-func textBlock(s string) M       { return M{"text": M{"text": s, "tone": "neutral"}} }
-func facts(items ...M) M         { return M{"facts": items} }
-func fact(label, value string) M { return M{"label": label, "value": value} }
-func fmtTime(ms uint32) string   { return fmt.Sprintf("%d:%02d.%03d", ms/60000, ms/1000%60, ms%1000) }
-func compound(id int) string {
-	if s, ok := map[int]string{16: "C5", 17: "C4", 18: "C3", 19: "C2", 20: "C1", 21: "C0", 22: "C6", 7: "INT", 8: "WET"}[id]; ok {
-		return s
-	}
-	return "—"
-}
-func tyreColour(c Car) string {
-	if c.Compound == 7 {
-		return "green"
-	}
-	if c.Compound == 8 {
-		return "blue"
-	}
-	switch c.Visual {
-	case 16:
-		return "red"
-	case 17:
-		return "yellow"
-	case 18:
-		return "white"
-	}
-	return ""
-}
-func sessionName(s int) string {
-	switch {
-	case s >= 1 && s <= 4:
-		return "Practice"
-	case s >= 5 && s <= 9:
-		return "Qualifying"
-	case s >= 10 && s <= 14:
-		return "Sprint qualifying"
-	case s >= 15 && s <= 17:
-		return "Race"
-	case s == 18:
-		return "Time Trial"
-	}
-	return "Session"
-}
-func position(c Car) int {
-	if c.Position > 0 {
-		return c.Position
-	}
-	return c.Grid
-}
-func driverName(i int, c Car) string {
-	if c.Name != "" {
-		return c.Name
-	}
-	return fmt.Sprintf("Driver %d", i+1)
-}
-func restricted(i, player int, c Car) bool { return c.Participant && !c.AI && !c.Public && i != player }
-func wearText(c Car, w int, hidden bool) string {
-	if !c.HasWear || hidden {
+func textBlock(s string) M { return M{"text": M{"text": s, "tone": "neutral"}} }
+func lapTime(ms uint32, known bool) string {
+	if !known || ms == 0 {
 		return "—"
 	}
-	return fmt.Sprintf("%.1f%%", c.Wear[w])
+	return fmt.Sprintf("%d:%02d.%03d", ms/60000, ms/1000%60, ms%1000)
 }
-func wearCell(value float64, known bool) M {
+func driverName(c Car) string {
+	if c.Known&knownName != 0 && c.Name != "" {
+		return c.Name
+	}
+	return fmt.Sprintf("Driver %d", c.Vehicle+1)
+}
+func rowID(f Frame, c Car) string {
+	return fmt.Sprintf("car-%d-%d-%d", f.Session, c.Vehicle, c.Identity)
+}
+func position(c Car) int {
+	if c.Known&knownPosition != 0 && c.Position > 0 {
+		return int(c.Position)
+	}
+	if c.Known&knownGrid != 0 && c.Grid > 0 {
+		return int(c.Grid)
+	}
+	return 1000 + int(c.Vehicle)
+}
+func visible(f Frame, mode string) []Car {
+	cars := append([]Car(nil), f.Cars...)
+	sort.SliceStable(cars, func(i, j int) bool { return position(cars[i]) < position(cars[j]) })
+	if mode == "full" || len(cars) <= 5 {
+		return cars
+	}
+	player := -1
+	for n, c := range cars {
+		if int32(c.Vehicle) == f.Player {
+			player = n
+			break
+		}
+	}
+	// Do not guess which car belongs to the user while controllers are loading.
+	if player < 0 {
+		return nil
+	}
+	start := player - 2
+	if start < 0 {
+		start = 0
+	}
+	if start+5 > len(cars) {
+		start = len(cars) - 5
+	}
+	return cars[start : start+5]
+}
+func tyreCell(c Car) any {
+	if c.Known&knownTyre == 0 {
+		return "—"
+	}
+	labels := map[int32]string{16: "C5", 17: "C4", 18: "C3", 19: "C2", 20: "C1", 7: "INT", 8: "WET"}
+	label := labels[c.Compound]
+	if label == "" {
+		return "—"
+	}
+	colour := ""
+	switch c.Visual {
+	case 16:
+		colour = "#FF4A5B"
+	case 17:
+		colour = "#FFD53F"
+	case 18:
+		colour = "#EEF2FA"
+	}
+	if c.Compound == 7 {
+		colour = "#41DA8B"
+	}
+	if c.Compound == 8 {
+		colour = "#4B9FFF"
+	}
+	if colour == "" {
+		return label
+	} // Never guess a dry tyre's colour from its absolute compound.
+	return M{"text": label, "sort": label, "edit": M{"colour": M{"value": colour, "disabled": true}}}
+}
+func wearCell(value float32, known bool) M {
 	if !known {
 		return M{"text": "—", "tone": "muted"}
 	}
@@ -79,108 +96,91 @@ func wearCell(value float64, known bool) M {
 	if value >= 75 {
 		tone = "bad"
 	}
-	return M{"text": fmt.Sprintf("%.1f%%", value), "bar": value / 100, "sort": value, "tone": tone}
+	return M{"text": fmt.Sprintf("%.1f%%", value), "bar": float64(value) / 100, "sort": value, "tone": tone}
+}
+func columns() []M {
+	c := []M{{"key": "position", "title": "Pos", "width": 46}, {"key": "driver", "title": "Driver"}, {"key": "tyre", "title": "Tyre", "width": 68}}
+	for _, s := range []string{"FL", "FR", "RL", "RR", "Avg"} {
+		c = append(c, M{"key": s, "title": s, "width": 84})
+	}
+	return append(c, M{"key": "last", "title": "Last lap", "width": 98}, M{"key": "best", "title": "Best lap", "width": 98}, M{"key": "setup", "title": "Setup", "width": 64})
 }
 
-// Compact paired values are placed beneath the selected timing row, never
-// in the launcher's native table detail panel (which can open at the side).
-func setupDetail(c Car) []M {
-	if len(c.Setup) != 50 {
-		return []M{textBlock("Setup unavailable — waiting for the game's Car Setups packet.")}
+var setupNames = [21]string{"Front wing", "Rear wing", "Differential · on throttle", "Differential · off throttle", "Front camber", "Rear camber", "Front toe", "Rear toe", "Front suspension", "Rear suspension", "Front anti-roll bar", "Rear anti-roll bar", "Front ride height", "Rear ride height", "Brake pressure", "Front brake bias", "Front-left pressure", "Front-right pressure", "Rear-left pressure", "Rear-right pressure", "Fuel remaining"}
+
+func setupValue(c Car, key int) string {
+	if c.SetupKnown&(1<<key) == 0 {
+		return "—"
 	}
-	r := c.Setup
-	b := func(off int, unit string) string { return fmt.Sprintf("%d%s", r[off], unit) }
-	f := func(off int, unit string) string {
-		v := f32(r[off:])
-		if !finite(v) {
-			return "—"
-		}
-		return fmt.Sprintf("%.2f%s", v, unit)
-	}
-	rows := [][]string{
-		{"Front wing", b(0, ""), "Rear wing", b(1, "")},
-		{"Differential · on throttle", b(2, "%"), "Differential · off throttle", b(3, "%")},
-		{"Front camber", f(4, "°"), "Rear camber", f(8, "°")},
-		{"Front toe", f(12, "°"), "Rear toe", f(16, "°")},
-		{"Front suspension", b(20, ""), "Rear suspension", b(21, "")},
-		{"Front anti-roll bar", b(22, ""), "Rear anti-roll bar", b(23, "")},
-		{"Front ride height", b(24, ""), "Rear ride height", b(25, "")},
-		{"Brake pressure", b(26, "%"), "Front brake bias", b(27, "%")},
-		{"Front-left pressure", f(37, " psi"), "Front-right pressure", f(41, " psi")},
-		{"Rear-left pressure", f(29, " psi"), "Rear-right pressure", f(33, " psi")},
-		{"Fuel load", f(46, " kg"), "", ""},
-	}
-	return []M{{"table": M{"id": "setup-values", "columns": []M{{"key": "left-setting", "title": "Setting"}, {"key": "left-value", "title": "Value", "width": 90}, {"key": "right-setting", "title": "Setting"}, {"key": "right-value", "title": "Value", "width": 90}}, "rows": rows, "compact": true}}}
-}
-func timingColumns() []M {
-	cols := []M{{"key": "position", "title": "Pos", "width": 46}, {"key": "driver", "title": "Driver"}, {"key": "tyre", "title": "Tyre", "width": 68}}
-	for _, name := range []string{"FL", "FR", "RL", "RR", "Avg"} {
-		cols = append(cols, M{"key": name, "title": name, "width": 84})
-	}
-	return append(cols, M{"key": "last", "title": "Last lap", "width": 98}, M{"key": "best", "title": "Best lap", "width": 98}, M{"key": "setup", "title": "Setup", "width": 64})
-}
-func (a *App) telemetryView() M {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	t := &a.tel
-	status := "Waiting for UDP"
+	v := c.Setup[key]
 	switch {
-	case !a.enabled:
-		status = "Addon disabled"
-	case a.listenErr != "":
-		status = "UDP listener unavailable"
-	case a.gameKnown && !a.gameRunning && !t.Active:
-		status = "Game stopped"
-	case t.Ended:
-		status = "Session ended"
-	case t.Active && t.Paused:
-		status = "Paused · values retained"
-	case t.Active && time.Since(t.Last) > 3*time.Second:
-		status = "No new packets · values retained"
-	case t.Active:
-		status = "Live"
+	case key == 2 || key == 3 || key == 14 || key == 15:
+		return fmt.Sprintf("%.0f%%", v)
+	case key >= 4 && key <= 7:
+		return fmt.Sprintf("%.2f°", v)
+	case key >= 16 && key <= 19:
+		return fmt.Sprintf("%.1f psi", v)
+	case key == 20:
+		return fmt.Sprintf("%.1f kg", v)
+	default:
+		return fmt.Sprintf("%.0f", v)
 	}
+}
+func setupDetail(c Car) []M {
+	rows := [][]string{}
+	for key := 0; key < 21; key += 2 {
+		row := []string{setupNames[key], setupValue(c, key), "", ""}
+		if key+1 < 21 {
+			row[2] = setupNames[key+1]
+			row[3] = setupValue(c, key+1)
+		}
+		rows = append(rows, row)
+	}
+	return []M{{"table": M{"id": fmt.Sprintf("setup-values-%d", c.Vehicle), "columns": []M{{"key": "left-setting", "title": "Setting"}, {"key": "left-value", "title": "Value", "width": 90}, {"key": "right-setting", "title": "Setting"}, {"key": "right-value", "title": "Value", "width": 90}}, "rows": rows, "compact": true}}}
+}
+func (a *App) view() M {
 	blocks := []M{}
-	if a.listenErr != "" {
-		blocks = append(blocks, textBlock(a.listenErr), M{"buttons": []M{{"id": "retry", "label": "Retry UDP listener", "icon": "refresh"}}})
-	}
 	batch := []M{}
-	flush := func(suffix string) {
-		if len(batch) == 0 {
-			return
-		}
-		blocks = append(blocks, M{"table": M{"id": "drivers" + suffix, "columns": timingColumns(), "rows": batch, "compact": true}})
-		batch = []M{}
-	}
-	visible := t.visible(a.prefs.Mode)
 	suffix := ""
-	for _, i := range visible {
-		c := t.Cars[i]
-		known := c.HasWear && !restricted(i, t.Player, c)
-		pos := "—"
-		if position(c) > 0 {
-			pos = fmt.Sprint(position(c))
+	flush := func() {
+		if len(batch) > 0 {
+			blocks = append(blocks, M{"table": M{"id": "drivers" + suffix, "columns": columns(), "rows": batch, "compact": true}})
+			batch = []M{}
 		}
-		pill := tyreCell(c)
-		open := a.expandedSet && a.expanded == i && a.expandedUID == t.UID
+	}
+	for _, c := range visible(a.frame, a.mode) {
+		p := "—"
+		if position(c) < 1000 {
+			p = fmt.Sprint(position(c))
+		}
+		open := a.expanded == rowID(a.frame, c)
+		cells := []any{p, driverName(c), tyreCell(c)}
+		for _, wheel := range []int{2, 3, 0, 1} {
+			cells = append(cells, wearCell(c.Wear[wheel], c.WearKnown&(1<<wheel) != 0))
+		}
 		avg := (c.Wear[0] + c.Wear[1] + c.Wear[2] + c.Wear[3]) / 4
-		row := M{"id": fmt.Sprintf("car-%d", i), "cells": []any{pos, driverName(i, c), pill, wearCell(c.Wear[2], known), wearCell(c.Wear[3], known), wearCell(c.Wear[0], known), wearCell(c.Wear[1], known), wearCell(avg, known), lapTime(c.Last), lapTime(c.Best), M{"text": "", "edit": M{"toggle": M{"value": open}}}}}
-		if i == t.Player && a.prefs.Highlight {
+		cells = append(cells, wearCell(avg, c.WearKnown&15 == 15), lapTime(c.Last, c.Known&knownLast != 0), lapTime(c.Best, c.Known&knownBest != 0), M{"text": "", "edit": M{"toggle": M{"value": open}}})
+		row := M{"id": rowID(a.frame, c), "cells": cells}
+		if a.highlight && int32(c.Vehicle) == a.frame.Player {
 			row["tone"] = "accent"
 		}
 		batch = append(batch, row)
 		if open {
-			flush(suffix)
-			blocks = append(blocks, M{"card": M{"title": "Car setup · " + driverName(i, c), "blocks": setupDetail(c)}})
-			suffix = fmt.Sprintf("-after-%d", i)
+			flush()
+			blocks = append(blocks, M{"card": M{"title": "Car setup · " + driverName(c), "blocks": setupDetail(c)}})
+			suffix = fmt.Sprintf("-after-%d", c.Vehicle)
 		}
 	}
-	flush(suffix)
-	if a.prefs.Mode != "none" && len(visible) == 0 {
-		blocks = append(blocks, M{"table": M{"id": "drivers", "columns": timingColumns(), "rows": []M{}, "compact": true, "empty": "Waiting for session participants. The page will show each field as soon as its UDP packet arrives."}})
+	flush()
+	if len(blocks) == 0 {
+		message := a.status
+		if a.frame.State&active != 0 && a.mode != "full" {
+			message = "Waiting to identify your car. Full grid is available in the add-on settings."
+		}
+		blocks = append(blocks, M{"table": M{"id": "drivers", "columns": columns(), "rows": []M{}, "compact": true, "empty": message}})
 	}
-	if !t.Active {
-		blocks = append(blocks, textBlock("Game telemetry: UDP On · Broadcast Off · IP 127.0.0.1 · match the port above · format 2025 or 2026 · 20 Hz."))
+	if a.frame.Diagnostic != "" {
+		blocks = append(blocks, textBlock(a.frame.Diagnostic))
 	}
-	return M{"subtitle": fmt.Sprintf("%s · %s · UDP %d · v%s", status, sessionName(t.Session), t.Format, addonVersion), "tick": true, "body": M{"blocks": blocks}}
+	return M{"subtitle": a.status + " · v" + addonVersion, "tick": true, "body": M{"blocks": blocks}}
 }

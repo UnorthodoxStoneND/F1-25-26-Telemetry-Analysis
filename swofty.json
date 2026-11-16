@@ -1,97 +1,29 @@
 {
   "schema_version": 1,
   "id": "unorthodoxstonendmodding.udp-telemetry",
-  "name": "UDP Telemetry",
-  "version": "0.4.0",
+  "name": "F1 Live Telemetry",
+  "version": "0.5.0",
   "author": "UnorthodoxStoneNDmodding",
-  "description": "Live UDP telemetry plus automatically saved sessions and Telemetry Analysis for F1 25 and the 2026 Season Pack, including My Team.",
+  "description": "Live driver positions, tyres, wear, lap times and car setups, read through Swofty and the game engine. Live display only; no UDP or recording.",
+  "license": "MIT",
+  "repository": "https://github.com/UnorthodoxStoneND/F1-25-26-Telemetry-Analysis",
   "category": "utility",
-  "kind": [],
-  "compat": {
-    "game": "f1_25",
-    "launcher": ">=1.9.55"
-  },
-  "saves": {
-    "affects": false
-  },
+  "kind": ["native"],
+  "compat": {"game": "f1_25", "launcher": ">=1.9.55"},
+  "requires": [{"id": "swofty.core", "version": ">=0.1.0"}],
+  "experimental_features": ["telemetry"],
+  "saves": {"affects": false},
   "options": [
     {
-      "id": "drivers_shown",
-      "type": "choice",
-      "label": "Drivers shown",
-      "default": "nearest",
-      "binds": "native",
-      "hidden": true,
-      "values": [
-        {
-          "value": "nearest",
-          "label": "Nearest cars (you + 4)"
-        },
-        {
-          "value": "full",
-          "label": "Full grid"
-        },
-        {
-          "value": "none",
-          "label": "None"
-        }
-      ]
+      "id": "drivers_shown", "type": "choice", "label": "Drivers shown", "default": "nearest", "binds": "native",
+      "values": [{"value": "nearest", "label": "Nearest cars (you + 4)"}, {"value": "full", "label": "Full grid"}]
     },
-    {
-      "id": "highlight_player",
-      "type": "toggle",
-      "label": "Highlight my row",
-      "default": false,
-      "binds": "native",
-      "hidden": true
-    },
-    {
-      "id": "udp_port",
-      "type": "choice",
-      "label": "UDP port",
-      "description": "Use your saved port, or choose a preset. Match the UDP port in the game.",
-      "default": "saved",
-      "binds": "native",
-      "hidden": true,
-      "values": [
-        {
-          "value": "saved",
-          "label": "Use saved port (20777 if new)"
-        },
-        "20777",
-        "20778",
-        "20779",
-        "20780",
-        "20781",
-        "20782",
-        "20783",
-        "20784",
-        "20800",
-        "20801",
-        "20802",
-        "20900",
-        "21000",
-        "22025",
-        "22026"
-      ]
-    }
+    {"id": "highlight_player", "type": "toggle", "label": "Highlight my row", "default": false, "binds": "native"}
   ],
+  "operations": {"native": [{"dll": "bin/telemetry-live.dll"}]},
   "launcher": {
-    "program": {
-      "windows": "bin/udp-telemetry.exe"
-    },
-    "sections": [
-      {
-        "id": "telemetry",
-        "title": "UDP Telemetry",
-        "icon": "activity"
-      },
-      {
-        "id": "analysis",
-        "title": "Telemetry Analysis",
-        "icon": "activity"
-      }
-    ],
+    "program": {"windows": "bin/telemetry-live.exe"},
+    "sections": [{"id": "telemetry", "title": "Live Telemetry", "icon": "activity"}],
     "startup": true
   }
 }
