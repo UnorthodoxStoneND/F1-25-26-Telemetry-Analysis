@@ -9,10 +9,10 @@ $env:CGO_ENABLED = "0"
 $env:GOOS = "windows"
 $env:GOARCH = "amd64"
 $env:GOAMD64 = "v1"
-go -C source build -buildvcs=false -trimpath -ldflags "-H=windowsgui" -o ../bin/telemetry-live.exe .
+go -C source build -buildvcs=false -trimpath -o ../bin/telemetry-live.exe .
 ```
 
-The Go helper retains symbols and DWARF debug information; path trimming removes local build paths. The native DLL build remains unchanged. Create the installable ZIP with `python source/package.py`. Antivirus results for earlier 0.4.x releases do not cover this executable or DLL.
+The Go helper retains symbols and DWARF debug information; path trimming removes local build paths. The helper uses the console subsystem, hidden by Swofty during normal use. The native DLL uses /MD and the same VC++ v14 x64 runtime family as Swofty. A separate /MT host checks real runtime loading and its missing-dependency diagnostic. Create the installable ZIP with `python source/package.py`. Antivirus results for earlier 0.4.x releases do not cover this executable or DLL.
 
 ## Local validation
 
@@ -26,6 +26,7 @@ python native/build.py
 After building the helper and packaging the add-on, run:
 
 ```powershell
+python tools/checks/build_contract.py
 python tools/checks/lifecycle_check.py
 python tools/checks/package_check.py --check integrity
 python tools/checks/package_check.py --check privacy

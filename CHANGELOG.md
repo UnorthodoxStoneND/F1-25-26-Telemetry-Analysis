@@ -1,8 +1,12 @@
 # F1 Telemetry changelog
 
-## Unreleased
+## 0.5.6 — 17 November 2026
 
-- License the add-on under GNU AGPL version 3 or later. Retain the Go BSD, Swofty SDK MIT and Microsoft C++ Standard Library Apache/LLVM notices, and document the Microsoft runtime terms. Previously released archives are unchanged.
+- License the add-on under GNU AGPL version 3 or later, retaining the applicable third-party licences and notices.
+- Build the Go helper with the console subsystem while retaining Go 1.27.4, path trimming, symbols and compressed debug information. Swofty hides the helper window during normal use.
+- Build the native DLL with the dynamic Microsoft C++ runtime (`/MD`), using the same VC++ v14 x64 runtime family as Swofty Launcher. Document runtime repair and check actual DLL dependency loading without an add-on-specific numeric version cutoff.
+- Preserve the 0.5.5 live acquisition, all four tyre pressures, setups and lap timing. No UDP, recording or analysis is added.
+- Build settings were selected using separately scanned 0.5.5 comparisons. Those scan results do not cover the newly versioned 0.5.6 EXE or ZIP.
 
 ## 0.5.5 — 17 November 2026
 

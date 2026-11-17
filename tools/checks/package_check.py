@@ -28,6 +28,7 @@ def main():
     archive=args.archive or ROOT/'dist'/f'F1_Telemetry_v{version}.zip'
     with zipfile.ZipFile(archive) as z:
         if args.check in ('all','integrity'):
+            subprocess.run([sys.executable,str(ROOT/'tools/checks/build_contract.py')],check=True)
             assert f'const addonVersion = "{version}"' in (ROOT/'source/main.go').read_text(encoding='utf-8')
             assert f'## {version} ' in (ROOT/'CHANGELOG.md').read_text(encoding='utf-8-sig')
             assert archive.name in (ROOT/'README.md').read_text(encoding='utf-8')

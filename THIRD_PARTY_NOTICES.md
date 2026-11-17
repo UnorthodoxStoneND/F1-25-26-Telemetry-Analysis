@@ -275,7 +275,7 @@ Software.
 
 ## Microsoft C/C++ runtime and Windows system components
 
-The native DLL build uses /MT and statically links Microsoft C/C++ runtime components. Microsoft’s runtime components retain their Microsoft licence terms; no standalone Microsoft runtime DLLs or redistributable installer are bundled.
+The native DLL dynamically uses Microsoft’s Visual C++ v14 x64 Redistributable and the Windows Universal CRT. Microsoft runtime DLLs and their installer are not bundled; install or repair the official runtime as described in README.md.
 
 These Microsoft components are licensed separately under their applicable Microsoft terms; they are not relicensed as AGPL by this project.
 
