@@ -40,6 +40,7 @@ type Reader struct {
 	address          uintptr
 	pid              uint32
 	buffer           [frameSize]byte
+	cars             [maxCars]Car
 }
 
 func (r *Reader) Close() {
@@ -56,6 +57,7 @@ func (r *Reader) Close() {
 	r.mapping = 0
 	r.process = 0
 	r.pid = 0
+	r.cars = [maxCars]Car{}
 }
 func (r *Reader) attach() bool {
 	h, _, _ := createSnapshot.Call(2, 0)
@@ -115,7 +117,7 @@ func (r *Reader) Read() (Frame, error) {
 		}
 		after := binary.LittleEndian.Uint64(sequence[:])
 		if before == after && after&1 == 0 && binary.LittleEndian.Uint64(r.buffer[16:]) == after {
-			return decode(r.buffer[:])
+			return decodeInto(r.buffer[:], r.cars[:0])
 		}
 	}
 	return Frame{}, errUpdating

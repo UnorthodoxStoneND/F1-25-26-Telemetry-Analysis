@@ -16,6 +16,7 @@ namespace {
 void(*load)();SwoftyFrameFn frame;
 std::map<std::string,SwoftyEventFn> subscribers;
 bool verified=false;
+uint32_t session_status=0,hub_status=0,load_status=0,unload_status=0;
 unsigned char pe[4096]{};
 std::unique_ptr<BindingFixture> fixture;
 void*(*get_lap)(void*,uint8_t);
@@ -32,6 +33,16 @@ int mixins(const SwoftyMixin* list,size_t count){for(size_t i=0;i<count;i++) {
  else assert(false);
  }return 1;}
 int available(){return 1;}
+uint32_t hash(const char* p){uint32_t h=5381;for(;*p;p++)h=h*33+uint8_t(*p);return h;}
+int flow_status(uint32_t key,uint32_t* status,uint64_t* age){
+ *age=0;
+ if(key==hash("StateSession"))*status=session_status;
+ else if(key==hash("SessionStateCareerHubUpdate"))*status=hub_status;
+ else if(key==hash("StateLoadSession"))*status=load_status;
+ else if(key==hash("StateUnloadSession"))*status=unload_status;
+ else return SWOFTY_ASSET_INVALID;
+ return SWOFTY_ASSET_OK;
+}
 int subscribe(const char* event,SwoftyEventFn fn,void*,uint32_t* token){subscribers[event]=fn;*token=1;return SWOFTY_ASSET_OK;}
 int on_frame(SwoftyFrameFn fn,void*,uint32_t* token){frame=fn;*token=2;return SWOFTY_ASSET_OK;}
 void emit(const char* name){SwoftyEvent e{};e.name=name;assert(subscribers.count(name));subscribers[name](&e,nullptr);}
@@ -47,6 +58,7 @@ int main(int argc,char** argv){
     auto init=reinterpret_cast<SwoftyAddonInitFn>(GetProcAddress(dll,"SwoftyAddonInit"));assert(init);
     SwoftyEvents events={available,subscribe,on_frame,nullptr};SwoftyApi api{};
     api.version=9;api.module_base=base;api.resolve=resolve;api.register_mixins=mixins;api.events=&events;api.log=log;
+    SwoftyCareer career{};career.available=available;career.flow_status=flow_status;api.career=&career;
     assert(!init(nullptr));assert(init(&api));assert(load);load();assert(frame);
     std::vector<unsigned char> system(0x100);uint64_t entries[32]{};unsigned char records[32][512]{};
     auto write=[](void* to,const auto& value){std::memcpy(to,&value,sizeof value);};
@@ -61,19 +73,47 @@ int main(int argc,char** argv){
     auto view=static_cast<const livewire::Frame*>(MapViewOfFile(handle,FILE_MAP_READ,0,0,sizeof(livewire::Frame)));assert(view);
     frame(.2,nullptr);assert(view->size==9216 && !(view->sequence&1));
     if(!verified) {assert(!view->count && view->diagnostic[0]);UnmapViewOfFile(view);CloseHandle(handle);FreeLibrary(dll);FreeLibrary(core);std::cout<<"PASS: unsupported build is reported instead of an indefinite waiting message\n";return 0;}
+    assert(!view->count); // Readable cars before a start are not a session.
+    session_status=2;hub_status=2;emit("session.start");emit("pause");
+    Sleep(210);frame(.2,nullptr);assert(!view->count && !(view->state&livewire::PAUSED));
+    // The career workstation is inside StateSession, but must stay empty.
+    hub_status=0;Sleep(210);frame(.2,nullptr);
     assert(view->count==24 && view->player==12 && (view->state&livewire::ACTIVE) && (view->state&livewire::DIRECT_READY));
     // These clocks run before a lap is completed, including in the garage.
     assert(!(view->cars[12].known&(livewire::LAST|livewire::BEST)));
     for(unsigned i=0;i<32;i++){float time=80.f+float(i);write(records[i]+0x48,20.f);write(records[i]+0x58,30.f);write(records[i]+0x68,time-50.f);}
+    assert(get_lap(system.data(),12)==reinterpret_cast<void*>(0x12345678));
     Sleep(210);frame(.2,nullptr);assert(view->cars[12].last_ms==92000&&view->cars[12].best_ms==92000);
-    assert(view->cars[0].position==1 && !std::strcmp(view->cars[0].name,"Driver 1"));
+    assert(view->cars[0].position==1 && !std::strcmp(view->cars[0].name,"Driver 1 First1"));
     assert(view->cars[0].wear_known==15 && view->cars[0].setup_known==(1u<<21)-1);
+    for(unsigned id=0;id<view->count;id++) {
+        const unsigned keys[]={livewire::PRESSURE_RL,livewire::PRESSURE_RR,livewire::PRESSURE_FL,livewire::PRESSURE_FR};
+        for(unsigned wheel=0;wheel<4;wheel++) {
+            assert(view->cars[id].setup_known&(1u<<keys[wheel]));
+            assert(std::fabs(view->cars[id].setup[keys[wheel]]-((wheel<2?22.f:24.f)+.1f*float(wheel+1)+.1f*float(id%4)))<.001);
+        }
+    }
+    assert((view->cars[1].known&livewire::PIT) && (view->cars[1].flags&livewire::IN_PIT_LANE));
+    fixture->memory.put(fixture->pit_records[1]+0x103,uint8_t(0));Sleep(210);frame(.2,nullptr);
+    assert((view->cars[1].known&livewire::PIT) && !(view->cars[1].flags&livewire::IN_PIT_LANE));
     emit("pause");assert(view->state&livewire::PAUSED && view->count==24);
     emit("resume");assert(!(view->state&livewire::PAUSED));
+    // Returning to the workstation clears rows even without session.end.
+    hub_status=1;Sleep(210);frame(.2,nullptr);assert(!view->count);
+    hub_status=2;Sleep(210);frame(.2,nullptr);assert(!view->count);
+    hub_status=3;Sleep(210);frame(.2,nullptr);assert(!view->count);
+    hub_status=0;Sleep(210);frame(.2,nullptr);assert(view->count==24);
+    load_status=1;Sleep(210);frame(.2,nullptr);assert(!view->count);
+    load_status=0;Sleep(210);frame(.2,nullptr);assert(view->count==24);
+    unload_status=1;Sleep(210);frame(.2,nullptr);assert(!view->count);
+    unload_status=0;Sleep(210);frame(.2,nullptr);assert(view->count==24);
+    api.career=nullptr;Sleep(210);frame(.2,nullptr);
+    assert(!view->count && std::strstr(view->diagnostic,"session-state API"));
+    api.career=&career;Sleep(210);frame(.2,nullptr);assert(view->count==24 && !view->diagnostic[0]);
     auto session=view->session;emit("session.end");assert(view->count==0 && view->session>session && (view->state&livewire::ENDED));
     Sleep(210);frame(.2,nullptr);assert(!view->count); // Stale core snapshot cannot resurrect ended session.
     emit("session.start");Sleep(210);frame(.2,nullptr);assert(view->count==24);
     emit("session.unload");assert(!view->count);
     UnmapViewOfFile(view);CloseHandle(handle);FreeLibrary(dll);FreeLibrary(core);
-    std::cout<<"PASS: real DLL, bindings-only core without snapshot export, 24-car grid, timing hooks, pause and end/start for build "<<nt->FileHeader.TimeDateStamp<<"\n";
+    std::cout<<"PASS: real DLL, no snapshot export, 24-car grid, full names, workstation/loading gates, timing, pause and end/start for build "<<nt->FileHeader.TimeDateStamp<<"\n";
 }

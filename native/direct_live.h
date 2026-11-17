@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 #include "readers.h"
+#include "live_api.h"
 #include <cstring>
 #include <cstdio>
 
@@ -9,7 +10,7 @@
 // vehicle id/lock/vtable, subsystem ownership, bounded vectors and unique ranks.
 namespace directlive {
 struct Sites {
- uint64_t table=0,count=0,manager=0,results=0,tyres=0,mode=0,entrants=0,participants=0;
+ uint64_t table=0,count=0,manager=0,results=0,tyres=0,mode=0,entrants=0,participants=0,pit=0;
  uint64_t controllers=0,controller_vt=0,human_vt=0,car_vt=0;
 };
 struct Entry {uint64_t key,value;};
@@ -65,13 +66,16 @@ template<class R> int player(R& r,const Sites& s) {
 }
 struct Context {
  Registry registry;
- uint64_t results=0,helper=0,mode=0,game=0,entrants=0,tyres=0,result_list=0,tyre_list=0,entry_list=0,participant_list=0;
+ uint64_t results=0,helper=0,mode=0,game=0,entrants=0,tyres=0,pit=0,result_list=0,tyre_list=0,entry_list=0,participant_list=0;
  size_t result_count=0,tyre_count=0,entry_count=0,participant_count=0;
- template<class R> void load(R& r,const Sites& s) {
+ template<class R> void load(R& r,const Sites& s,bool need_tyres=true,bool need_pit=true) {
   registry.load(r,s.manager);
   results=registry.find(s.results);helper=registry.find(s.participants);mode=registry.find(s.mode);entrants=registry.find(s.entrants);tyres=registry.find(s.tyres);
+  if(!need_tyres) tyres=0;
+  pit=need_pit?registry.find(s.pit):0;
   auto current_mode=readers::pointer(r,mode+0x88);game=readers::pointer(r,current_mode+0x260);
-  result_count=vector_size(r,results,0x148,8,64,result_list);tyre_count=vector_size(r,tyres,0x110,8,64,tyre_list);
+  result_count=vector_size(r,results,0x148,8,64,result_list);
+  tyre_list=0;tyre_count=need_tyres?vector_size(r,tyres,0x110,8,64,tyre_list):0;
   entry_count=vector_size(r,game,0x2e0,0x88,512,entry_list);participant_count=vector_size(r,helper,0x88,8,64,participant_list);
  }
  template<class R> uint64_t result(R& r,unsigned id)const {
@@ -79,6 +83,7 @@ struct Context {
   return readers::read(r,record,vehicle)&&vehicle==id?record:0;
  }
  template<class R> void ranks(R& r,unsigned id,livewire::Car& c)const {
+  if(c.known&livewire::POSITION) return; // Grid is only a fallback ordering key.
   auto record=result(r,id);if(!record) return;
   uint32_t a=0,b=0;
   if(readers::read(r,record+0x48,a)&&readers::read(r,record+0x50,b)&&(a^b)<result_count&&(a^b)<32) {c.position=int32_t((a^b)+1);c.known|=livewire::POSITION;}
@@ -91,17 +96,30 @@ struct Context {
    if(car&&readers::read(r,car+0xe8,vehicle)&&vehicle==id) {part=p;break;}
   }
   uint8_t flags=0;if(!part||!readers::read(r,part+0x32,flags)) return;
-  uint64_t name=0;
-  if(flags&0x80) name=readers::pointer(r,helper+0x60);
-  else for(size_t i=0;i<entry_count;i++) {
+  uint64_t name=0,first=0;
+  for(size_t i=0;i<entry_count;i++) {
    auto entry=entry_list+i*0x88;uint8_t vehicle=255;uint32_t reference=0;
    if(!readers::read(r,entry+0x82,vehicle)||vehicle!=id) continue;
    if(!readers::read(r,entry+0x50,reference)||(reference&255)>2) break;
    auto driver_table=readers::pointer(r,entrants+0x268+(reference&255)*16);uint64_t records=0;
    auto count=vector_size(r,driver_table,8,16,65536,records);auto index=reference>>16;
-   if(index<count) {auto record=readers::pointer(r,records+index*16+8);name=readers::pointer(r,record+0xc8);}break;
+   if(index<count) {
+    auto record=readers::pointer(r,records+index*16+8);
+    // Loaded DriverRecord = packed ref + DriverInfo. Its localised first/last
+    // string pointers are +0x30/+0xc8 (Steam driver-loader and copy constructor).
+    first=readers::pointer(r,record+0x30);name=readers::pointer(r,record+0xc8);
+   }break;
   }
-  if(name && name_at(r,name,c.name)) c.known|=livewire::NAME;
+  char surname[128]{},given[128]{};
+  if(name && name_at(r,name,surname)) {
+   size_t last_size=std::strlen(surname);
+   if(first && name_at(r,first,given) && last_size+1+std::strlen(given)<sizeof c.name) {
+    std::memcpy(c.name,surname,last_size);c.name[last_size]=' ';
+    std::memcpy(c.name+last_size+1,given,std::strlen(given)+1);
+    c.flags|=uint32_t(last_size)<<16; // UTF-8 byte boundary, not a guessed word split.
+   } else std::memcpy(c.name,surname,last_size+1);
+   c.known|=livewire::NAME;
+  } else if((flags&0x80) && name_at(r,readers::pointer(r,helper+0x60),c.name)) c.known|=livewire::NAME;
  }
  template<class R> void compound(R& r,unsigned id,livewire::Car& c)const {
   if(id>=tyre_count) return;
@@ -123,13 +141,31 @@ struct Context {
   if(!((actual>=16&&actual<=20)||actual==7||actual==8)||!((colour>=16&&colour<=18)||colour==7||colour==8)) return;
   c.compound=actual;c.visual=colour;c.known|=livewire::TYRES;
  }
- template<class R> bool fill(R& r,const Sites& s,livewire::Frame& frame) {
-  frame={};frame.player=player(r,s);frame.state=livewire::DIRECT_READY;
+ template<class R> void pit_lane(R& r,unsigned id,livewire::Car& c)const {
+  // The game's lane arrays have 27 slots, independently of the vehicle table.
+  if(!pit || id>=27) return;
+  auto state=readers::pointer(r,pit+0x68+id*16);uint32_t phase=0;
+  auto lane=readers::pointer(r,pit+0x48);
+  auto vehicle=readers::pointer(r,lane+0x938+id*16);uint8_t inside=0;
+  if(!state||!lane||!vehicle||!readers::read(r,state+4,phase)||phase>15||
+     !readers::read(r,vehicle+0x103,inside)||inside>1) return;
+  c.known|=livewire::PIT;
+  if(inside) c.flags|=livewire::IN_PIT_LANE;
+ }
+ template<class R> bool fill(R& r,const Sites& s,livewire::Frame& frame,const SwoftyLive* api=nullptr) {
+  frame={};frame.player=-1;frame.state=livewire::DIRECT_READY;
   uint8_t count=0;
   if(!s.table||!s.count||!s.car_vt) {std::snprintf(frame.diagnostic,sizeof frame.diagnostic,"Required vehicle bindings are unavailable.");return false;}
   if(!readers::read(r,s.count,count)||count>32) {std::snprintf(frame.diagnostic,sizeof frame.diagnostic,"The vehicle count could not be read within the supported range.");return false;}
   if(!count) return false;
-  load(r,s);
+  liveapi::Snapshot snapshot;snapshot.load(api,count);
+  if(!snapshot.player(frame.player,count)) frame.player=player(r,s);
+  bool need_tyres=false,need_pit=false;
+  for(unsigned id=0;id<count;id++) {
+   livewire::Car c{};snapshot.apply(id,c,count);
+   need_tyres|=!(c.known&livewire::TYRES);need_pit|=!(c.known&livewire::PIT);
+  }
+  load(r,s,need_tyres,need_pit);
   uint64_t positions=0,grids=0;bool duplicate_positions=false,duplicate_grids=false;
   for(unsigned id=0;id<count;id++) {
    auto car=readers::pointer(r,s.table+id*8);uint8_t vehicle=255;
@@ -138,7 +174,11 @@ struct Context {
    auto ers=readers::pointer(r,car+0x5a8);
    if((!ers||readers::pointer(r,ers+8)!=car)&&!result(r,id)) continue;
    auto& c=frame.cars[frame.count++];c.vehicle=id;c.identity=car;c.flags=8|(frame.player==int(id)?1:0);
-   ranks(r,id,c);driver(r,id,c);compound(r,id,c);readers::wear(r,car,c);readers::setup(r,car,c);
+   snapshot.apply(id,c,count);
+   ranks(r,id,c);driver(r,id,c);
+   if(!(c.known&livewire::TYRES)) compound(r,id,c);
+   readers::wear(r,car,c);readers::setup(r,car,c);
+   if(!(c.known&livewire::PIT)) pit_lane(r,id,c);
    if(c.known&livewire::POSITION) {uint64_t bit=1ull<<c.position;duplicate_positions|=(positions&bit)!=0;positions|=bit;}
    if(c.known&livewire::GRID) {uint64_t bit=1ull<<c.grid;duplicate_grids|=(grids&bit)!=0;grids|=bit;}
   }

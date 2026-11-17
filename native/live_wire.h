@@ -6,7 +6,8 @@
 namespace livewire {
 constexpr unsigned VERSION = 1, CARS = 32, SETTINGS = 21;
 enum State : uint32_t { ACTIVE=1, PAUSED=2, API_READY=4, DIRECT_READY=8, TIMING_READY=16, ENDED=32 };
-enum Known : uint32_t { NAME=1, POSITION=2, GRID=4, TYRES=8, LAST=16, BEST=32 };
+enum Known : uint32_t { NAME=1, POSITION=2, GRID=4, TYRES=8, LAST=16, BEST=32, PIT=64 };
+enum CarFlag : uint32_t { PLAYER=1, IN_PIT_LANE=2 };
 enum Setup : unsigned { FW,RW,DIFF_ON,DIFF_OFF,CAMBER_F,CAMBER_R,TOE_F,TOE_R,SUSP_F,SUSP_R,ARB_F,ARB_R,RIDE_F,RIDE_R,BRAKE_PRESSURE,BRAKE_BIAS,PRESSURE_FL,PRESSURE_FR,PRESSURE_RL,PRESSURE_RR,FUEL };
 struct Car {
     uint32_t vehicle, known;
@@ -15,7 +16,7 @@ struct Car {
     float wear[4]; // RL, RR, FL, FR, percent
     float setup[SETTINGS];
     char name[128];
-    uint32_t flags;
+    uint32_t flags; // bits 16..23: surname UTF-8 byte length when name includes given name
     uint64_t identity;
 };
 struct Frame {

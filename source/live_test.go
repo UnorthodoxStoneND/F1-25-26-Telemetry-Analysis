@@ -123,7 +123,10 @@ func TestLiveViewAndSetup(t *testing.T) {
 	if r["tone"] != "accent" {
 		t.Fatal("player highlight missing")
 	}
-	if r["cells"].([]any)[7].(M)["text"] != "—" {
+	averageJSON, _ := json.Marshal(r["cells"].([]any)[7])
+	var average M
+	_ = json.Unmarshal(averageJSON, &average)
+	if average["text"] != "—" {
 		t.Fatal("average used incomplete wear")
 	}
 	if path := os.Getenv("TELEMETRY_NATIVE_VIEWS"); path != "" {
@@ -143,6 +146,34 @@ func TestLiveViewAndSetup(t *testing.T) {
 		}
 	}
 }
+func TestPressureSetupForPlayerAndOtherCars(t *testing.T) {
+	a := App{frame: grid(), enabled: true, mode: "full", status: "Live"}
+	for _, driver := range []int{0, 12, 23} {
+		c := &a.frame.Cars[driver]
+		c.SetupKnown = 15 << 16
+		copy(c.Setup[16:20], []float32{24.3, 24.4, 22.1, 22.2})
+		a.expanded = rowID(a.frame, *c)
+		raw, err := json.Marshal(a.view())
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, text := range []string{"Front-left pressure", "Front-right pressure", "Rear-left pressure", "Rear-right pressure", "24.3 psi", "24.4 psi", "22.1 psi", "22.2 psi"} {
+			if !bytes.Contains(raw, []byte(text)) {
+				t.Fatalf("driver %d missing %q from setup card", driver, text)
+			}
+		}
+		a.lastView, a.viewSent = a.viewState(), true
+		c.Setup[18] = 22.5
+		if !a.needsView() {
+			t.Fatalf("driver %d rear-pressure change did not refresh setup", driver)
+		}
+		c.SetupKnown &^= 1 << 18
+		if setupValue(*c, 18) != "—" || setupValue(*c, 19) != "22.2 psi" {
+			t.Fatal("missing rear reading hid another corner or fabricated a value")
+		}
+	}
+}
+
 func TestStaleSetupEvent(t *testing.T) {
 	a := App{frame: grid()}
 	c := a.frame.Cars[0]

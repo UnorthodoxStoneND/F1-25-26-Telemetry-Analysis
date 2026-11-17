@@ -80,7 +80,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
-          go-version-file: source/go.mod
+          go-version: '1.27.4'
           cache: false
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         if: matrix.python == true
@@ -89,7 +89,7 @@ jobs:
       - name: Build Windows helper
         if: matrix.helper == true
         working-directory: source
-        run: go build -buildvcs=false -trimpath -ldflags '-s -w -H=windowsgui' -o ../bin/telemetry-live.exe .
+        run: go build -buildvcs=false -trimpath -ldflags '-H=windowsgui' -o ../bin/telemetry-live.exe .
       - name: Run check
         run: ${{ matrix.command }}
       - name: Check out released Swofty 1.9.55

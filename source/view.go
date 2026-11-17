@@ -1,8 +1,10 @@
 package main
 
 import (
+	"cmp"
 	"fmt"
-	"sort"
+	"slices"
+	"strings"
 )
 
 func textBlock(s string) M { return M{"text": M{"text": s, "tone": "neutral"}} }
@@ -14,12 +16,22 @@ func lapTime(ms uint32, known bool) string {
 }
 func driverName(c Car) string {
 	if c.Known&knownName != 0 && c.Name != "" {
+		if surnameBytes := int((c.Flags >> 16) & 255); surnameBytes > 0 && surnameBytes < len(c.Name) && c.Name[surnameBytes] == ' ' {
+			return strings.ToUpper(c.Name[:surnameBytes]) + c.Name[surnameBytes:]
+		}
 		return c.Name
 	}
 	return fmt.Sprintf("Driver %d", c.Vehicle+1)
 }
 func rowID(f Frame, c Car) string {
 	return fmt.Sprintf("car-%d-%d-%d", f.Session, c.Vehicle, c.Identity)
+}
+func driverCell(c Car) any {
+	name := driverName(c)
+	if c.Known&knownPit != 0 && c.Flags&inPitLane != 0 {
+		return M{"text": name + " · PIT", "spans": []M{{"text": name + " · "}, {"text": "PIT", "tone": "warn", "bold": true}}}
+	}
+	return name
 }
 func position(c Car) int {
 	if c.Known&knownPosition != 0 && c.Position > 0 {
@@ -31,8 +43,11 @@ func position(c Car) int {
 	return 1000 + int(c.Vehicle)
 }
 func visible(f Frame, mode string) []Car {
-	cars := append([]Car(nil), f.Cars...)
-	sort.SliceStable(cars, func(i, j int) bool { return position(cars[i]) < position(cars[j]) })
+	return visibleInto(f, mode, nil)
+}
+func visibleInto(f Frame, mode string, storage []Car) []Car {
+	cars := append(storage, f.Cars...)
+	slices.SortStableFunc(cars, func(a, b Car) int { return cmp.Compare(position(a), position(b)) })
 	if mode == "full" || len(cars) <= 5 {
 		return cars
 	}
@@ -56,6 +71,106 @@ func visible(f Frame, mode string) []Car {
 	}
 	return cars[start : start+5]
 }
+
+// Only retain inputs to the displayed page, not the sample clock or hidden
+// setups. Poll every tick as before, but leave Swofty's existing view alone
+// until one of its inputs changes. Fixed storage bounds the retained state.
+type viewState struct {
+	Session                            uint64
+	Player                             int32
+	Status, Diagnostic, Mode, Expanded string
+	Highlight, Active                  bool
+	Count                              int
+	Cars                               [maxCars]Car
+}
+
+func (a *App) viewState() viewState {
+	state := viewState{Session: a.frame.Session, Player: a.frame.Player,
+		Status: a.status, Diagnostic: a.frame.Diagnostic, Mode: a.mode,
+		Expanded: a.expanded, Highlight: a.highlight, Active: a.frame.State&active != 0}
+	var storage [maxCars]Car
+	for n, c := range visibleInto(a.frame, a.mode, storage[:0]) {
+		c.Flags &= (255 << 16) | inPitLane
+		c.Known &= knownName | knownPosition | knownGrid | knownTyre | knownLast | knownBest | knownPit
+		if c.Known&knownPit == 0 {
+			c.Flags &^= inPitLane
+		}
+		if c.Known&knownName == 0 {
+			c.Name = ""
+		}
+		if c.Known&knownPosition == 0 {
+			c.Position = 0
+		}
+		if c.Known&knownGrid == 0 {
+			c.Grid = 0
+		}
+		if c.Known&knownTyre == 0 {
+			c.Compound = 0
+			c.Visual = 0
+		}
+		if c.Known&knownLast == 0 {
+			c.Last = 0
+		}
+		if c.Known&knownBest == 0 {
+			c.Best = 0
+		}
+		c.WearKnown &= 15
+		for wheel := range c.Wear {
+			if c.WearKnown&(1<<wheel) == 0 {
+				c.Wear[wheel] = 0
+			}
+		}
+		if a.expanded == "" || a.expanded != rowID(a.frame, c) {
+			c.SetupKnown = 0
+		}
+		c.SetupKnown &= (1 << 21) - 1
+		for setting := range c.Setup {
+			if c.SetupKnown&(1<<setting) == 0 {
+				c.Setup[setting] = 0
+			}
+		}
+		state.Cars[n] = c
+		state.Count++
+	}
+	return state
+}
+
+func (a *App) needsView() bool { return !a.viewSent || a.viewState() != a.lastView }
+
+// Typed cells preserve the launcher JSON while avoiding several maps per cell.
+type textValue struct {
+	Text string `json:"text"`
+	Tone string `json:"tone"`
+}
+type wearValue struct {
+	Text string  `json:"text"`
+	Bar  float64 `json:"bar"`
+	Sort float32 `json:"sort"`
+	Tone string  `json:"tone"`
+}
+type colourField struct {
+	Value    string `json:"value"`
+	Disabled bool   `json:"disabled"`
+}
+type colourEdit struct {
+	Colour colourField `json:"colour"`
+}
+type tyreValue struct {
+	Text string     `json:"text"`
+	Sort string     `json:"sort"`
+	Edit colourEdit `json:"edit"`
+}
+type toggleField struct {
+	Value bool `json:"value"`
+}
+type toggleEdit struct {
+	Toggle toggleField `json:"toggle"`
+}
+type toggleValue struct {
+	Text string     `json:"text"`
+	Edit toggleEdit `json:"edit"`
+}
+
 func tyreCell(c Car) any {
 	if c.Known&knownTyre == 0 {
 		return "—"
@@ -83,11 +198,11 @@ func tyreCell(c Car) any {
 	if colour == "" {
 		return label
 	} // Never guess a dry tyre's colour from its absolute compound.
-	return M{"text": label, "sort": label, "edit": M{"colour": M{"value": colour, "disabled": true}}}
+	return tyreValue{Text: label, Sort: label, Edit: colourEdit{Colour: colourField{Value: colour, Disabled: true}}}
 }
-func wearCell(value float32, known bool) M {
+func wearCell(value float32, known bool) any {
 	if !known {
-		return M{"text": "—", "tone": "muted"}
+		return textValue{Text: "—", Tone: "muted"}
 	}
 	tone := "good"
 	if value >= 50 {
@@ -96,14 +211,18 @@ func wearCell(value float32, known bool) M {
 	if value >= 75 {
 		tone = "bad"
 	}
-	return M{"text": fmt.Sprintf("%.1f%%", value), "bar": float64(value) / 100, "sort": value, "tone": tone}
+	return wearValue{Text: fmt.Sprintf("%.1f%%", value), Bar: float64(value) / 100, Sort: value, Tone: tone}
 }
-func columns() []M {
+
+var driverColumns = makeColumns()
+
+func columns() []M { return driverColumns }
+func makeColumns() []M {
 	c := []M{{"key": "position", "title": "Pos", "width": 46}, {"key": "driver", "title": "Driver"}, {"key": "tyre", "title": "Tyre", "width": 68}}
 	for _, s := range []string{"FL", "FR", "RL", "RR", "Avg"} {
-		c = append(c, M{"key": s, "title": s, "width": 84})
+		c = append(c, M{"key": s, "title": s})
 	}
-	return append(c, M{"key": "last", "title": "Last lap", "width": 98}, M{"key": "best", "title": "Best lap", "width": 98}, M{"key": "setup", "title": "Setup", "width": 64})
+	return append(c, M{"key": "last", "title": "Last lap"}, M{"key": "best", "title": "Best lap"}, M{"key": "setup", "title": "Setup", "width": 64})
 }
 
 var setupNames = [21]string{"Front wing", "Rear wing", "Differential · on throttle", "Differential · off throttle", "Front camber", "Rear camber", "Front toe", "Rear toe", "Front suspension", "Rear suspension", "Front anti-roll bar", "Rear anti-roll bar", "Front ride height", "Rear ride height", "Brake pressure", "Front brake bias", "Front-left pressure", "Front-right pressure", "Rear-left pressure", "Rear-right pressure", "Fuel remaining"}
@@ -154,12 +273,12 @@ func (a *App) view() M {
 			p = fmt.Sprint(position(c))
 		}
 		open := a.expanded == rowID(a.frame, c)
-		cells := []any{p, driverName(c), tyreCell(c)}
+		cells := []any{p, driverCell(c), tyreCell(c)}
 		for _, wheel := range []int{2, 3, 0, 1} {
 			cells = append(cells, wearCell(c.Wear[wheel], c.WearKnown&(1<<wheel) != 0))
 		}
 		avg := (c.Wear[0] + c.Wear[1] + c.Wear[2] + c.Wear[3]) / 4
-		cells = append(cells, wearCell(avg, c.WearKnown&15 == 15), lapTime(c.Last, c.Known&knownLast != 0), lapTime(c.Best, c.Known&knownBest != 0), M{"text": "", "edit": M{"toggle": M{"value": open}}})
+		cells = append(cells, wearCell(avg, c.WearKnown&15 == 15), lapTime(c.Last, c.Known&knownLast != 0), lapTime(c.Best, c.Known&knownBest != 0), toggleValue{Edit: toggleEdit{Toggle: toggleField{Value: open}}})
 		row := M{"id": rowID(a.frame, c), "cells": cells}
 		if a.highlight && int32(c.Vehicle) == a.frame.Player {
 			row["tone"] = "accent"

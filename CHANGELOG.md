@@ -1,5 +1,37 @@
 # F1 Telemetry changelog
 
+## 0.5.5 — 16 November 2026
+
+- Correct tyre-pressure acquisition: read each suspension wheel's configured pressure at `+0x9c`, as written by the game's setup setter, instead of the derived spring coefficient at `+0x64`.
+- Add regressions for all four corners on player and other cars, wheel-to-display order, unit normalisation, invalid/missing readings and the real DLL's published shared snapshot. Preserve unavailable values as unknown.
+- Retain Go 1.27.4, symbols/debug information and the existing live-only acquisition path. No UDP, recording or analysis is introduced. In-game pressure confirmation remains required.
+
+## 0.5.4 — 16 November 2026
+
+- Carry over the v0.4.2 Go build improvements: pin Go 1.27.4 and retain symbols and DWARF debug information by removing `-s -w`. Keep path trimming and the Windows GUI subsystem.
+- Preserve the v0.5.3 live acquisition path: Swofty's Live State API with checked binding-reader fallback and a local shared-memory snapshot. No UDP receiver or fallback, recording or analysis is introduced.
+- Package a new test build. In-game validation and resource comparisons remain outstanding; v0.4.2 antivirus scan results do not cover these new binaries.
+
+## 0.5.3 — 16 November 2026
+
+- Prefer Swofty's shared Live State snapshot for player identity, classification position, tyre compound and pit-lane status. Skip the corresponding direct readers for each valid field; retain direct acquisition for full names, wear, setups and completed lap times.
+- Fall back per field when Live State is absent, unavailable or incomplete. Reject invalid values, mismatched vehicle IDs/counts and snapshots that change during sampling. Preserve the session gate, pause handling and object checks from 0.5.2. No UDP acquisition is introduced.
+- Add host tests for API priority, skipped reads, partial coverage, malformed/mixed snapshots and recovery on 4/24/32-car grids. In-game verification and any resource comparison remain outstanding.
+
+## 0.5.2 — 16 November 2026
+
+- Show a highlighted PIT marker beside a driver's name while the game's pit-lane membership flag is set. Read it through Swofty's pit-lane binding; keep unavailable readings unknown and respect the lane array's 27-slot bound.
+- Keep the live table empty at the career trackside workstation, before a session starts and during session loading/unloading. Require the actual session flow state as well as the start callback; retain values when an active session is paused.
+- Read the game's localised first and last driver names and display them as SURNAME Firstname, including custom driver records where available. Keep the game's existing name when separate fields are unavailable.
+- Let driver, wear and lap-time columns share the available table width automatically as the launcher window changes size. Keep compact position, tyre and setup controls and the setup card beneath its driver.
+- Retain the 0.5.1 memory optimisations, binding readers and completed-sector lap-timing validation. In-game confirmation of the new session gate, full names and window sizing remains required.
+
+## 0.5.1 — 16 November 2026
+
+- Reduce helper allocations by reusing snapshot storage, sharing fixed column definitions and using typed native table cells.
+- Keep polling at the existing rate, but request a launcher page rebuild only when its displayed inputs change. Sample timestamps, off-screen cars and closed setup cards no longer cause redundant rebuilds.
+- Preserve live values, native controls, nearest/full-grid selection, setup cards, pause retention and session clearing. The game readers and lap-timing fix are unchanged. Actual launcher memory savings still require in-game measurement.
+
 ## 0.5.0 — 16 November 2026
 
 - Correct Last/Best Lap showing an advancing counter while cars are in the garage. Accept a lap only when all three sector times are present and add up to its total; unfinished counters leave the columns unavailable or retain the previous completed lap. Invalid completed laps update Last without becoming Best.

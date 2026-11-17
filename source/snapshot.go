@@ -23,7 +23,9 @@ const (
 	knownTyre     = 8
 	knownLast     = 16
 	knownBest     = 32
+	knownPit      = 64
 )
+const inPitLane = 2
 
 type Car struct {
 	Vehicle, Known                    uint32
@@ -51,6 +53,9 @@ func cstring(b []byte) string {
 	return strings.ToValidUTF8(string(b), "�")
 }
 func decode(b []byte) (Frame, error) {
+	return decodeInto(b, nil)
+}
+func decodeInto(b []byte, storage []Car) (Frame, error) {
 	f := Frame{Player: -1}
 	if len(b) != frameSize || string(b[:8]) != "USTLIVE1" || binary.LittleEndian.Uint32(b[8:]) != 1 || binary.LittleEndian.Uint32(b[12:]) != frameSize {
 		return f, fmt.Errorf("incompatible live snapshot")
@@ -66,6 +71,7 @@ func decode(b []byte) (Frame, error) {
 	if count > maxCars {
 		return Frame{}, fmt.Errorf("invalid driver count")
 	}
+	f.Cars = storage[:0]
 	seen := uint32(0)
 	for n := 0; n < int(count); n++ {
 		at := 256 + 280*n

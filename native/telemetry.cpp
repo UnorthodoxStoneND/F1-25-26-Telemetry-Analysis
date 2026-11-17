@@ -16,6 +16,7 @@ namespace {
 const SwoftyApi* api;
 
 const SwoftyMem* memory;
+const SwoftyLive* live;
 HANDLE mapping;
 livewire::Frame* shared;
 livewire::Session session;
@@ -100,8 +101,32 @@ void on_frame(double,void*) {
         if(binding_error[0]) std::snprintf(session.frame.diagnostic,sizeof session.frame.diagnostic,"%s",binding_error);
         publish();return;
     }
+    uint32_t status=0;uint64_t age=0;
+    auto hash=[](const char* text){uint32_t h=5381;for(;*text;text++)h=h*33+uint8_t(*text);return h;};
+    auto flow=api->career && api->career->flow_status?api->career->flow_status:nullptr;
+    int flow_result=flow?flow(hash("StateSession"),&status,&age):SWOFTY_ASSET_UNAVAILABLE;
+    bool in_session=flow_result==SWOFTY_ASSET_OK && (status==1||status==2),blocked=false;
+    for(const char* name:{"StateLoadSession","StateUnloadSession","SessionStateCareerHubUpdate"}) {
+        status=0;
+        if(flow && flow(hash(name),&status,&age)==SWOFTY_ASSET_OK && status!=0) blocked=true;
+    }
+    bool was_permitted=session.permitted;
+    if(!session.allow(in_session,blocked)) {
+        if(was_permitted) {
+            lap_system.store(0);for(auto& cache:timing_cache)cache={};
+            std::memset(car_identity,0,sizeof car_identity);
+        }
+        session.frame.diagnostic[0]=0;
+        if(flow_result==SWOFTY_ASSET_UNAVAILABLE)
+            std::snprintf(session.frame.diagnostic,sizeof session.frame.diagnostic,"Swofty's session-state API is unavailable.");
+        publish();return;
+    }
+    if(!was_permitted) {
+        lap_system.store(0);for(auto& cache:timing_cache)cache={};
+        std::memset(car_identity,0,sizeof car_identity);
+    }
     livewire::Frame next{};auto read=copy_memory;
-    if(direct_context.fill(read,sites,next)) {
+    if(direct_context.fill(read,sites,next,live)) {
         for(unsigned n=0;n<next.count;n++) {
             auto& c=next.cars[n];auto id=c.vehicle;
             if(car_identity[id]!=c.identity) {timing_cache[id]={};car_identity[id]=c.identity;}
@@ -118,7 +143,7 @@ void on_frame(double,void*) {
     publish();
 }
 void on_load() {
-
+    live=core_export<SwoftyLive>("SwoftyCoreLive");
     memory=core_export<SwoftyMem>("SwoftyCoreMem");
     if(!memory || memory->version!=1) memory=nullptr;
     direct=memory && verified_layout();
@@ -129,6 +154,7 @@ void on_load() {
         sites.results=resolve_binding("k_Live_SessionSystemKey");sites.tyres=resolve_binding("k_Live_TyreSystemKey");
         sites.mode=resolve_binding("k_Live_GameModeSystemKey");sites.entrants=resolve_binding("k_Live_EntrantsSystemKey");
         sites.participants=resolve_binding("k_Live_VehicleHelperSystemKey");sites.controllers=resolve_binding("g_Live_ControllerSystem");
+        sites.pit=resolve_binding("k_Live_PitLaneSystemKey");
         sites.controller_vt=resolve_binding("vt_Sess_ControllerSystem");sites.human_vt=resolve_binding("vt_Sess_HumanController");
         sites.car_vt=resolve_binding("vt_Car_SystemsContainer");
         direct=sites.count && sites.car_vt;

@@ -34,15 +34,34 @@ int main(int argc,char** argv) {
     for(unsigned w=0;w<4;w++) {
         uint64_t tyre=0x800000+0x1000*w,wheel=0x900000+0x1000*w;
         m.block(tyre,0x100);m.block(wheel,0x100);m.put(dynamics+0x60+8*w,tyre);m.put(tyre+0x10,car);m.put(tyre+0x88,float(w+1)*.1f);
-        m.put(susp+0x70+8*w,wheel);m.put(wheel+0x64,w<2?22.f:24.f);
+        // Game setup writer: +0x64 is a spring coefficient; +0x9c is pressure.
+        m.put(susp+0x70+8*w,wheel);m.put(wheel+0x64,0.f);
+        m.put(wheel+0x9c,(w<2?22.f:24.f)+.1f*float(w+1));
     }
     m.put(aero+0x19b4,uint32_t(20));m.put(aero+0x19c0,uint32_t(25));m.put(brake+0x21dc,.98f);m.put(brake+0x21d8,.4f);m.put(fuel+0x100,50.f);
     for(auto s:readers::SLIDERS) m.put(tune+s.offset,.5f);
     m.put(tune+0x248,.5f);m.put(tune+0x24c,.5f);
     livewire::Car c{};readers::wear(m,car,c);readers::setup(m,car,c);
     assert(c.wear_known==15 && std::fabs(c.wear[2]-30)<.001);
-    assert(c.setup_known==(1u<<21)-1 && c.setup[2]==55 && c.setup[4]==-3 && c.setup[12]==25 && c.setup[15]==58);
-    assert(c.setup[16]==24 && c.setup[18]==22);
+    if(c.setup_known!=((1u<<21)-1)||std::fabs(c.setup[16]-24.3f)>.001||
+       std::fabs(c.setup[17]-24.4f)>.001||std::fabs(c.setup[18]-22.1f)>.001||std::fabs(c.setup[19]-22.2f)>.001) {
+        std::cerr<<"FAIL: all four setup pressures must come from wheel+0x9c in FL/FR/RL/RR display order\n";return 1;
+    }
+    assert(c.setup[2]==55 && c.setup[4]==-3 && c.setup[12]==25 && c.setup[15]==58);
+    // Unrelated coefficients must not masquerade as plausible psi readings.
+    for(unsigned w=0;w<4;w++)m.put(0x900000+0x1000*w+0x64,30.f);
+    c={};readers::setup(m,car,c);assert(std::fabs(c.setup[16]-24.3f)<.001&&std::fabs(c.setup[18]-22.1f)<.001);
+    // Existing unit normalisation and per-wheel invalid/missing handling.
+    for(float scale:{1.f,1.f/14.503773773f,1.f/.14503773773f,1.f/.00014503773773f}) {
+        for(unsigned w=0;w<4;w++)m.put(0x900000+0x1000*w+0x9c,(w<2?22.f:24.f)*scale);
+        c={};readers::setup(m,car,c);assert(c.setup[16]==24&&c.setup[17]==24&&c.setup[18]==22&&c.setup[19]==22);
+    }
+    m.put(0x900000+0x9c,std::numeric_limits<float>::quiet_NaN());
+    m.put(0x901000+0x9c,0.f);c={};readers::setup(m,car,c);
+    assert(!(c.setup_known&(1u<<livewire::PRESSURE_RL))&&!(c.setup_known&(1u<<livewire::PRESSURE_RR)));
+    assert((c.setup_known&(1u<<livewire::PRESSURE_FL))&&(c.setup_known&(1u<<livewire::PRESSURE_FR)));
+    m.put(susp+0x80,uint64_t(0));c={};readers::setup(m,car,c);
+    assert(!(c.setup_known&(1u<<livewire::PRESSURE_FL))&&(c.setup_known&(1u<<livewire::PRESSURE_FR)));
     // Invalid ownership and a missing wheel must never turn into a known zero.
     m.put(0x800000+0x10,uint64_t(car+8));m.put(0x801000+0x88,std::numeric_limits<float>::quiet_NaN());
     c={};readers::wear(m,car,c);assert(c.wear_known==12);

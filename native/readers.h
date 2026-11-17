@@ -60,7 +60,9 @@ template<class R> void setup(R& r,uint64_t car,livewire::Car& out,const Slider* 
     auto suspension=pointer(r,car+0x580);
     if(suspension && pointer(r,suspension+8)==car) for(unsigned n=0;n<4;n++) {
         auto wheel=pointer(r,suspension+0x70+8*n); float pressure=0;
-        if(wheel && read(r,wheel+0x64,pressure) && std::isfinite(pressure)) {
+        // Car_Setup_SetTyrePressure stores the configured target at +0x9c.
+        // +0x64 contains a derived spring coefficient, not tyre pressure.
+        if(wheel && read(r,wheel+0x9c,pressure) && std::isfinite(pressure)) {
             // The physical wheel may use Pa, kPa, bar or psi. Reject implausible conversions.
             double psi=pressure>20000?pressure*.00014503773773:pressure>100?pressure*.14503773773:pressure<5?pressure*14.503773773:pressure;
             if(psi>=10 && psi<=50) setting(out, n<2?18+n:14+n, float(std::round(psi*10)/10));

@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-const addonVersion = "0.5.0"
+const addonVersion = "0.5.5"
 const addonID = "unorthodoxstonendmodding.udp-telemetry"
 
 type M = map[string]any
@@ -27,6 +27,8 @@ type App struct {
 	profileName, data, mode, status string
 	highlight                       bool
 	expanded                        string
+	lastView                        viewState
+	viewSent                        bool
 }
 
 func (a *App) profile(raw json.RawMessage) {
@@ -198,7 +200,9 @@ func run(in io.Reader, out io.Writer) error {
 			a.refresh()
 			if msg.Method == "view" {
 				result = a.view()
-			} else {
+				a.lastView = a.viewState()
+				a.viewSent = true
+			} else if a.needsView() {
 				send(M{"method": "invalidate", "params": M{"section": "telemetry"}})
 			}
 		case "event":
