@@ -1,7 +1,7 @@
 # GitHub validation checks
 
-The single Add-on and Swofty validation workflow lists each validation separately. Main
-is protected by the ten add-on checks and six upstream compatibility checks and twelve upstream validation jobs.
+The single CI workflow lists each validation separately. Main
+is protected by the ten add-on checks and six upstream compatibility checks.
 Build shared test artifacts and Prepare Swofty validation tools are setup jobs;
 their failure also fails the dependent required checks instead of skipping them.
 
@@ -36,24 +36,8 @@ The minimum in swofty_versions.json must match the manifest's launcher minimum.
 Latest stable is resolved once per run, and its immutable commit and release tag
 are recorded in the validation artifact and printed by each compatibility check.
 Only the consumed native ABI is compared: a higher API version or appended
-unused fields need not break compatibility. The add-on stays live-only. Upstream tests validate upstream source and do not enable UDP, recording or analysis in the add-on. Real-game tests retain upstream’s skips when F1 files are absent.
+unused fields need not break compatibility. These checks do not run the actual
+game or copy Swofty's unrelated application, recorder or network test suites.
 
 Normal developer use of native/build.py still builds and runs its native tests.
 The --build-only option is for CI's separately reported test jobs.
-
-## Complete upstream CI validation
-
-- Swofty Rust (ubuntu-latest)
-- Swofty Rust (windows-latest)
-- Swofty UI (ubuntu-22.04)
-- Swofty UI (windows-latest)
-- Swofty compatibility gate tool
-- Swofty installer (ubuntu-22.04)
-- Swofty installer (windows-latest)
-- Swofty documentation build
-- Swofty standard library schemas
-- Swofty native loader and Wine test
-- Swofty release binaries - Linux
-- Swofty release binaries - Windows
-
-The source commit and complete mapping are in swofty_upstream_inventory.json. All twelve validations run for add-on PRs and main; add-on path changes cannot skip Wine or Rust tests. GitHub-hosted runners replace upstream’s AWS runner provisioning. The docs validation serves both upstream CI and Pages; deployment is not copied. Release binaries reuse each platform’s already built and tested UI executable. No release or website is published by this workflow.

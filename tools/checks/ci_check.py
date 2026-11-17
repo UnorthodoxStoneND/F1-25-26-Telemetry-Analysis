@@ -6,7 +6,7 @@ import re
 import subprocess
 import sys
 
-ROOT=Path(__file__).resolve().parents[1]
+ROOT=Path(__file__).resolve().parents[2]
 NATIVE=ROOT/'.verify/native'
 DEDICATED={'TestReleasedAndFutureLauncherHandshake','TestBoundedLiveMemory','TestNativeABI'}
 
@@ -28,7 +28,7 @@ def main():
         name='TestReleasedAndFutureLauncherHandshake' if args.check=='protocol' else 'TestBoundedLiveMemory'
         run([test,'-test.v','-test.run','^'+name+'$'])
     elif args.check=='static':run(['go','-C','source','vet','./...'])
-    elif args.check=='policy':run([sys.executable,'checks/live_policy.py'])
+    elif args.check=='policy':run([sys.executable,'tools/checks/live_policy.py'])
     elif args.check=='readers':
         run([NATIVE/'readers_test.exe',NATIVE/'frame.bin'])
         run([NATIVE/'binding_test.exe'])
@@ -37,7 +37,7 @@ def main():
     elif args.check=='publisher':
         for mode in ([],['verified'],['current']):
             run([NATIVE/'publisher_test.exe',NATIVE/'swofty_core.dll',ROOT/'bin/telemetry-live.dll']+mode)
-    elif args.check=='helper':run([sys.executable,'checks/lifecycle_check.py'])
-    else:run([sys.executable,'checks/package_check.py','--check',args.check])
+    elif args.check=='helper':run([sys.executable,'tools/checks/lifecycle_check.py'])
+    else:run([sys.executable,'tools/checks/package_check.py','--check',args.check])
 
 if __name__=='__main__':main()

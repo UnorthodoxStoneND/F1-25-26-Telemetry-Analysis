@@ -11,7 +11,7 @@ import tomllib
 import urllib.request
 import zipfile
 
-ROOT=Path(__file__).resolve().parents[1]
+ROOT=Path(__file__).resolve().parents[2]
 OUTPUT=ROOT/'.verify/swofty-compat'
 REPOSITORY='Swofty-Developments/SwoftyLauncher'
 
@@ -37,7 +37,7 @@ def sdk_report(header,folder):
     folder.mkdir(parents=True,exist_ok=True)
     env=compiler_environment()
     compiler=Path(env['VCTOOLSINSTALLDIR'])/'bin/Hostx64/x64/cl.exe'
-    run([compiler,'/nologo','/std:c++20','/EHsc','/O2','/MT','/W4','/WX','/I'+str(header.parent),ROOT/'checks/sdk_contract.cpp','/Fo'+str(folder/'probe.obj'),'/Fe'+str(folder/'probe.exe')],env=env)
+    run([compiler,'/nologo','/std:c++20','/EHsc','/O2','/MT','/W4','/WX','/I'+str(header.parent),ROOT/'tools/checks/sdk_contract.cpp','/Fo'+str(folder/'probe.obj'),'/Fe'+str(folder/'probe.exe')],env=env)
     return json.loads(subprocess.check_output([str(folder/'probe.exe')],text=True))
 
 def compare_sdk(baseline,upstream):
@@ -46,7 +46,7 @@ def compare_sdk(baseline,upstream):
     assert not differences,'Consumed native SDK contract changed: '+json.dumps(differences)
 
 def prepare(no_install=False,offline=False):
-    config=json.loads((ROOT/'checks/swofty_versions.json').read_text())
+    config=json.loads((ROOT/'tools/checks/swofty_versions.json').read_text())
     assert config['repository']==REPOSITORY
     minimum=config['minimum']
     manifest=json.loads((ROOT/'swofty.json').read_text())
@@ -94,7 +94,7 @@ def prepare(no_install=False,offline=False):
         shutil.copy2(upstream/'packages/sdk/include/swofty_api.h',target/'swofty_api.h')
         example=upstream/'packages/addon-api/examples/telemetry_contract.rs'
         example.parent.mkdir(exist_ok=True)
-        shutil.copy2(ROOT/'checks/native_api.rs',example)
+        shutil.copy2(ROOT/'tools/checks/native_api.rs',example)
         channel=tomllib.loads((upstream/'rust-toolchain.toml').read_text())['toolchain']['channel']
         assert re.fullmatch(r'\d+\.\d+\.\d+',channel),'Expected an explicitly pinned upstream Rust toolchain'
         env=compiler_environment()
