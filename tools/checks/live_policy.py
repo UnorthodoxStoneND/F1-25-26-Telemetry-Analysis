@@ -3,7 +3,7 @@ from pathlib import Path
 import json
 import re
 
-root=Path(__file__).resolve().parents[1]
+root=Path(__file__).resolve().parents[2]
 m=json.loads((root/'swofty.json').read_text(encoding='utf-8'))
 assert m['version']=='0.5.5' and m['kind']==['native']
 assert {o['id'] for o in m['options']}=={'drivers_shown','highlight_player'}

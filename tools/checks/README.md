@@ -1,6 +1,6 @@
 # GitHub validation checks
 
-The single Windows addon checks workflow lists each validation separately. Main
+The single CI workflow lists each validation separately. Main
 is protected by the ten add-on checks and six upstream compatibility checks.
 Build shared test artifacts and Prepare Swofty validation tools are setup jobs;
 their failure also fails the dependent required checks instead of skipping them.

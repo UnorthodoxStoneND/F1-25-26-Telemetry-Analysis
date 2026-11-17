@@ -1,4 +1,4 @@
-name: Windows addon checks
+name: CI
 
 on:
   push:
@@ -110,7 +110,7 @@ jobs:
           name: addon-test-build
           path: .
       - name: Run the individual validation
-        run: python checks/ci_check.py ${{ matrix.check }}
+        run: python tools/checks/ci_check.py ${{ matrix.check }}
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: matrix.check == 'unit' && success()
         with:
@@ -134,7 +134,7 @@ jobs:
       - name: Resolve releases and build each upstream validator once
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python checks/swofty_compat.py prepare
+        run: python tools/checks/swofty_compat.py prepare
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: swofty-validation-tools
@@ -196,4 +196,4 @@ jobs:
           name: live-view-fixtures
           path: .verify
       - name: Run the individual Swofty validation
-        run: python checks/swofty_compat.py check --release ${{ matrix.release }} --kind ${{ matrix.kind }}
+        run: python tools/checks/swofty_compat.py check --release ${{ matrix.release }} --kind ${{ matrix.kind }}

@@ -1,62 +1,47 @@
 # F1 25/26 Live Telemetry [Swofty Add-On]
 
-## Description
-
-**v0.5.5 provides live telemetry inside Swofty** for F1 25 and the 2026 Season Pack, including My Team. Follow driver positions, tyres, wear and completed lap times, then expand a driver's row to inspect the car's setup.
-
-Data comes directly from Swofty's Live State API and checked game bindings. **No UDP configuration is needed: this version has no UDP receiver or fallback, recording or analysis page.** Existing 0.4.x recordings are left untouched, but cannot be reviewed in this version. Keep version 0.4.2 if recording and post-session analysis are needed.
+Live telemetry and car setups inside Swofty Launcher for F1 25 and the 2026 Season Pack, including My Team. Version **0.5.5** is live-only: no UDP configuration, recording or post-session analysis.
 
 ## Features
 
-- Driver positions and names in **SURNAME Firstname** order, such as **NORRIS Lando**. Names come from the game's localised driver records, including custom drivers where available; the existing game name is retained when separate fields are unavailable. Choose either the full grid or your car and the nearest four cars. Nearest shows two ahead and two behind, shifting towards the available cars at either end of the grid.
-- Actual tyre compound labels with native coloured circles. Dry tyre colours use the current soft/medium/hard designation; intermediates are green and wets blue.
-- A highlighted **PIT** marker beside a driver's name while that car is in the pit lane. It follows the game's lane-membership reading, including a stationary pit stop; a missing reading does not fabricate a marker.
-- Individual FL, FR, RL and RR wear bars and percentages, plus the average when all four readings are available.
-- Last completed lap and best valid lap for each driver. Unavailable values appear as a dash.
-- A setup control beneath each driver's row showing wings, differentials, camber, toe, suspension, anti-roll bars, ride heights, brakes, all four configured tyre pressures and fuel remaining. Unavailable readings show a dash. Fuel remaining is the current tank value, rather than the original setup fuel load.
-- Optional highlighting of your own row. Display settings are in Swofty's add-on settings.
-- Driver, wear and lap-time columns automatically share the available width when the launcher is resized or maximised. Narrow windows can still truncate content; maximising gives these columns more room.
-- The table stays empty at the career trackside workstation and during session loading/unloading. Values appear in the actual session's garage or grid. Pausing an active session retains current values. Session end/unload clears them; closing the game releases the shared snapshot.
+- Live driver positions, full names, tyre compounds and pit-lane indicators.
+- Individual wheel wear, last completed lap and best valid lap for each driver.
+- Expandable car setups, including all four configured tyre pressures and current fuel.
+- Full-grid or nearby-driver views, optional player highlighting and a resizable table.
+- Data from Swofty's Live State API and checked native game bindings, with bounded shared memory and no telemetry files or uploads.
 
-## Install guide
+See the [live-data reference](https://github.com/UnorthodoxStoneND/F1-25-26-Telemetry-Analysis/blob/main/docs/reference/live-data.md) for display behaviour, supported readings and process details.
 
-1. Download **`F1_Telemetry_v0.5.5.zip`** from [GitHub Releases](https://github.com/UnorthodoxStoneND/F1-25-26-Telemetry-Analysis/releases). Use the named ZIP, rather than GitHub's automatic Source code download. The add-on is not listed in Swofty's Addon Browser.
-2. Close the game. In Swofty, open **Addons → Install addon from computer** and select the ZIP.
-3. Enable **F1 Live Telemetry** in your active profile. Configure **Drivers shown** and **Highlight my row** in its settings.
-4. Restart Swofty after replacing an earlier version, then launch the game through Swofty so its native component is loaded. Open **Live Telemetry** in the launcher.
+## Install
 
-No game UDP settings or port configuration are needed. Grid and garage values appear once the actual session is active and its underlying game systems become available; a lap time cannot appear before a completed lap exists.
+Download **`F1_Telemetry_v0.5.5.zip`** from [GitHub Releases](https://github.com/UnorthodoxStoneND/F1-25-26-Telemetry-Analysis/releases), then select **Addons â†’ Install addon from computer** in Swofty. Enable **F1 Live Telemetry** in the active profile and restart Swofty and the game after updating.
 
-### Processes and local files
-
-Swofty starts **`telemetry-live.exe`**, a small background helper with no separate window. It communicates with Swofty through local input/output pipes. Swofty loads **`telemetry-live.dll`** inside the game using its normal native add-on system. The DLL optionally uses `SwoftyCoreLive` for player identity, position, tyre compound and pit-lane status, skipping the corresponding direct readers when valid snapshot fields exist. Missing, unsupported or inconsistent snapshots fall back to the checked binding readers. Full names, wear, setups and completed lap times retain their direct readers. Two existing lap-timing functions are observed without changing their arguments or results. The add-on does not change car settings or game files.
-
-Live State availability depends on Swofty's verified layouts for the running game build. This version therefore does not promise a memory reduction on every build; it avoids duplicate acquisition where the launcher already provides valid data. The older telemetry API, which can include UDP data, is not used.
-
-The DLL publishes a fixed **9 KiB shared-memory snapshot** in Windows. The helper opens it read-only and displays the latest values. There is no network listener, web server, separate recording process, Python runtime or installed Windows service. The add-on retains current values and a small timing cache, rather than recording a session history.
-
-The helper exits when Swofty closes its communication pipe. Disabling the add-on clears its display and closes the helper's snapshot handles; Swofty may keep the helper process running. A native component already loaded in a running game remains there until that game closes. Restart the game after enabling, disabling or updating a native add-on.
-
-v0.5.5 writes no telemetry files, images or settings of its own. Swofty manages its profile settings and normal launcher logs. Existing data in **Documents/F1 Game Telemetry** is left untouched, but this live-only version does not open or analyse those recordings. Nothing is uploaded by the add-on.
+Follow the [installation guide](https://github.com/UnorthodoxStoneND/F1-25-26-Telemetry-Analysis/blob/main/docs/guide/installation.md) for the complete steps. The add-on is not listed in Swofty's Addon Browser.
 
 ## Supported platforms
 
-- **Operating system:** Windows x64.
-- **Launcher:** Swofty 1.9.55 and compatible later versions retaining launcher API 1, native binding API 9, session callbacks and memory-check API 1. No maximum launcher version is imposed; future breaking API changes may require an update.
-- **Game:** F1 25 on Steam, including the 2026 Season Pack and My Team. Object readers support the inspected Steam layouts with PE timestamps `1789118616` and `1794312636`. Swofty resolves the addresses for the running build; object ownership, vehicle identity and vector bounds are checked before values are shown. Unsupported builds or missing bindings produce an explicit message.
+- Windows x64.
+- Swofty 1.9.55 and compatible later versions retaining the required APIs.
+- F1 25 on Steam, including the 2026 Season Pack and My Team, on the supported game layouts.
 
-Automated checks cover the live readers, Live State fallback, session transitions, completed lap timing, tyre-pressure wheel order, shared-memory format and launcher views. In-game testing confirmed setup values display for all cars, with the player's values checked against the game. Resource improvements have not been measured across every supported build.
+See [compatibility and testing](https://github.com/UnorthodoxStoneND/F1-25-26-Telemetry-Analysis/blob/main/docs/reference/compatibility.md) for the exact requirements and verification limits. For recording and post-session analysis, keep version 0.4.2; this version leaves existing recordings untouched.
 
-## Build from source
+## Contributing
 
-Use Go **1.27.4** and the Visual Studio C++ x64 build tools. From the add-on root, build the native DLL and run its host tests with `python native/build.py`, then build the Go helper:
+Use Go **1.27.4**, Python and the Visual Studio C++ x64 build tools. From the repository root:
 
 ```powershell
-$env:CGO_ENABLED = "0"
-$env:GOOS = "windows"
-$env:GOARCH = "amd64"
-$env:GOAMD64 = "v1"
-go -C source build -buildvcs=false -trimpath -ldflags "-H=windowsgui" -o ../bin/telemetry-live.exe .
+go -C source vet ./...
+go -C source test -trimpath -count=1 ./...
+python native/build.py
 ```
 
-The Go helper retains symbols and DWARF debug information; path trimming removes local build paths. The native DLL build remains unchanged. Create the installable ZIP with `python source/package.py`. Antivirus results for earlier 0.4.x releases do not cover this executable or DLL.
+See the [development guide](https://github.com/UnorthodoxStoneND/F1-25-26-Telemetry-Analysis/blob/main/docs/reference/development.md) for build and packaging commands, the repository layout and local checks. The [CI check reference](https://github.com/UnorthodoxStoneND/F1-25-26-Telemetry-Analysis/blob/main/tools/checks/README.md) lists each required validation. Report whether changes were tested in game when opening a PR.
+
+## Licence
+
+[MIT](LICENSE). The Go runtime and vendored Swofty SDK retain their own notices; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and [native/SDK-LICENSE.txt](native/SDK-LICENSE.txt).
+
+## Credits
+
+- [Swofty Launcher](https://github.com/Swofty-Developments/SwoftyLauncher) for the launcher, Live State API and native add-on SDK.

@@ -4,7 +4,7 @@ import json
 import subprocess
 import tempfile
 
-root=Path(__file__).resolve().parents[1]
+root=Path(__file__).resolve().parents[2]
 with tempfile.TemporaryDirectory() as temp:
     path=Path(temp)/'unused'
     requests=[{'id':1,'method':'hello','params':{'api':1,'launcher':'1.9.55','data_dir':str(path),'profile':{'name':'default','enabled':True}}},
