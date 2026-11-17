@@ -1,5 +1,9 @@
 # F1 Telemetry changelog
 
+## Unreleased
+
+- License the add-on under GNU AGPL version 3 or later. Retain the Go BSD, Swofty SDK MIT and Microsoft C++ Standard Library Apache/LLVM notices, and document the Microsoft runtime terms. Previously released archives are unchanged.
+
 ## 0.5.5 — 17 November 2026
 
 - Correct tyre-pressure acquisition: read each suspension wheel's configured pressure at `+0x9c`, as written by the game's setup setter, instead of the derived spring coefficient at `+0x64`.
