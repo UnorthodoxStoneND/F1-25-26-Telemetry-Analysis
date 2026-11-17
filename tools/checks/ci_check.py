@@ -35,6 +35,9 @@ def main():
         run([NATIVE/'live_api_test.exe'])
         run([test,'-test.v','-test.run','^TestNativeABI$'],dict(os.environ,TELEMETRY_ABI_FRAME=str(NATIVE/'frame.bin')))
     elif args.check=='publisher':
+        run([NATIVE/'runtime_check.exe', ROOT/'bin/telemetry-live.dll'])
+        missing=subprocess.run([str(NATIVE/'runtime_check.exe'),str(ROOT/'bin/telemetry-live.dll'),'telemetry-intentionally-missing-runtime.dll'],capture_output=True,text=True)
+        assert missing.returncode==2 and 'Install or repair' in missing.stderr,missing
         for mode in ([],['verified'],['current']):
             run([NATIVE/'publisher_test.exe',NATIVE/'swofty_core.dll',ROOT/'bin/telemetry-live.dll']+mode)
     elif args.check=='helper':run([sys.executable,'tools/checks/lifecycle_check.py'])

@@ -25,7 +25,8 @@ output.mkdir(parents=True, exist_ok=True)
 (root / 'bin').mkdir(exist_ok=True)
 common = [str(compiler), '/nologo', '/std:c++20', '/EHsc', '/O2', '/MT', '/W4', '/WX', '/I'+str(root/'native')]
 if not args.tests_only:
-    subprocess.run(common + ['/LD', str(root/'native/telemetry.cpp'), '/Fo'+str(output/'telemetry.obj'),
+    dll_flags = [flag for flag in common if flag != '/MT'] + ['/MD']
+    subprocess.run(dll_flags + ['/LD', str(root/'native/telemetry.cpp'), '/Fo'+str(output/'telemetry.obj'),
                             '/link', '/Brepro', '/OUT:'+str(root/'bin/telemetry-live.dll'),
                             '/IMPLIB:'+str(output/'telemetry-live.lib')], env=env, cwd=output, check=True)
 subprocess.run(common + [str(root/'native/readers_test.cpp'), '/Fo'+str(output/'readers_test.obj'),
@@ -41,6 +42,13 @@ subprocess.run(common + [str(root/'native/live_api_test.cpp'), '/Fo'+str(output/
 if not args.build_only:
     subprocess.run([str(output/'live_api_test.exe')], check=True, timeout=30)
 if not args.tests_only:
+    subprocess.run(common + [str(root/'native/runtime_check.cpp'), '/Fo'+str(output/'runtime_check.obj'),
+                            '/Fe'+str(output/'runtime_check.exe'), '/link', '/Brepro', 'version.lib'], env=env, cwd=output, check=True)
+    if not args.build_only:
+        subprocess.run([str(output/'runtime_check.exe'), str(root/'bin/telemetry-live.dll')],check=True,timeout=30)
+        missing = subprocess.run([str(output/'runtime_check.exe'),str(root/'bin/telemetry-live.dll'),
+                                  'telemetry-intentionally-missing-runtime.dll'],capture_output=True,text=True,timeout=30)
+        assert missing.returncode == 2 and 'Install or repair' in missing.stderr, missing
     subprocess.run(common + ['/LD', str(root/'native/core_mock.cpp'), '/Fo'+str(output/'core_mock.obj'),
                             '/link', '/OUT:'+str(output/'swofty_core.dll'), '/IMPLIB:'+str(output/'core_mock.lib')], env=env, cwd=output, check=True)
     subprocess.run(common + [str(root/'native/publisher_test.cpp'), '/Fo'+str(output/'publisher_test.obj'),
