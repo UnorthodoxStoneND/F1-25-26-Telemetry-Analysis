@@ -7,6 +7,7 @@ import subprocess
 root = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--tests-only', action='store_true')
+parser.add_argument('--build-only', action='store_true', help='Compile CI artifacts without running tests')
 args = parser.parse_args()
 program_files = Path(os.environ.get('ProgramFiles(x86)', r'C:\Program Files (x86)'))
 vswhere = program_files / 'Microsoft Visual Studio/Installer/vswhere.exe'
@@ -29,19 +30,23 @@ if not args.tests_only:
                             '/IMPLIB:'+str(output/'telemetry-live.lib')], env=env, cwd=output, check=True)
 subprocess.run(common + [str(root/'native/readers_test.cpp'), '/Fo'+str(output/'readers_test.obj'),
                         '/Fe'+str(output/'readers_test.exe'), '/link', '/Brepro'], env=env, cwd=output, check=True)
-subprocess.run([str(output/'readers_test.exe'), str(output/'frame.bin')], check=True, timeout=30)
+if not args.build_only:
+    subprocess.run([str(output/'readers_test.exe'), str(output/'frame.bin')], check=True, timeout=30)
 subprocess.run(common + [str(root/'native/binding_test.cpp'), '/Fo'+str(output/'binding_test.obj'),
                         '/Fe'+str(output/'binding_test.exe'), '/link', '/Brepro'], env=env, cwd=output, check=True)
-subprocess.run([str(output/'binding_test.exe')], check=True, timeout=30)
+if not args.build_only:
+    subprocess.run([str(output/'binding_test.exe')], check=True, timeout=30)
 subprocess.run(common + [str(root/'native/live_api_test.cpp'), '/Fo'+str(output/'live_api_test.obj'),
                         '/Fe'+str(output/'live_api_test.exe'), '/link', '/Brepro'], env=env, cwd=output, check=True)
-subprocess.run([str(output/'live_api_test.exe')], check=True, timeout=30)
+if not args.build_only:
+    subprocess.run([str(output/'live_api_test.exe')], check=True, timeout=30)
 if not args.tests_only:
     subprocess.run(common + ['/LD', str(root/'native/core_mock.cpp'), '/Fo'+str(output/'core_mock.obj'),
                             '/link', '/OUT:'+str(output/'swofty_core.dll'), '/IMPLIB:'+str(output/'core_mock.lib')], env=env, cwd=output, check=True)
     subprocess.run(common + [str(root/'native/publisher_test.cpp'), '/Fo'+str(output/'publisher_test.obj'),
                             '/Fe'+str(output/'publisher_test.exe')], env=env, cwd=output, check=True)
-    subprocess.run([str(output/'publisher_test.exe'),str(output/'swofty_core.dll'),str(root/'bin/telemetry-live.dll')], check=True, timeout=30)
-    subprocess.run([str(output/'publisher_test.exe'),str(output/'swofty_core.dll'),str(root/'bin/telemetry-live.dll'),'verified'], check=True, timeout=30)
-    subprocess.run([str(output/'publisher_test.exe'),str(output/'swofty_core.dll'),str(root/'bin/telemetry-live.dll'),'current'], check=True, timeout=30)
-print('PASS: native readers, session lifecycle and wire ABI; no game launched')
+    if not args.build_only:
+        subprocess.run([str(output/'publisher_test.exe'),str(output/'swofty_core.dll'),str(root/'bin/telemetry-live.dll')], check=True, timeout=30)
+        subprocess.run([str(output/'publisher_test.exe'),str(output/'swofty_core.dll'),str(root/'bin/telemetry-live.dll'),'verified'], check=True, timeout=30)
+        subprocess.run([str(output/'publisher_test.exe'),str(output/'swofty_core.dll'),str(root/'bin/telemetry-live.dll'),'current'], check=True, timeout=30)
+print('PASS: native CI artifacts compiled; tests run separately' if args.build_only else 'PASS: native readers, session lifecycle and wire ABI; no game launched')

@@ -13,67 +13,19 @@ concurrency:
   group: addon-checks-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+env:
+  CGO_ENABLED: '0'
+  GOOS: windows
+  GOARCH: amd64
+  GOAMD64: v1
+  GOTOOLCHAIN: local
+  GOWORK: 'off'
+
 jobs:
-  checks:
-    name: ${{ matrix.name }}
+  build:
+    name: Build shared test artifacts
     runs-on: windows-latest
-    timeout-minutes: 40
-    strategy:
-      fail-fast: false
-      max-parallel: 4
-      matrix:
-        include:
-          - name: Unit tests
-            command: go -C source test -trimpath -count=1 ./...
-          - name: Static analysis
-            command: go -C source vet ./...
-          - name: Launcher protocol compatibility
-            command: go -C source test -trimpath -count=1 -run '^TestReleasedAndFutureLauncherHandshake$' -v
-          - name: Live memory bounds
-            command: go -C source test -trimpath -count=1 -run '^TestBoundedLiveMemory$' -v
-          - name: Live-only acquisition policy
-            python: true
-            command: python checks/live_policy.py
-          - name: Native game readers
-            python: true
-            command: |
-              python native/build.py --tests-only
-              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-              $env:TELEMETRY_ABI_FRAME = Join-Path (Get-Location) '.verify/native/frame.bin'
-              go -C source test -trimpath -count=1 -run '^TestNativeABI$' -v
-          - name: Native publisher lifecycle
-            python: true
-            command: python native/build.py
-          - name: Helper lifecycle and shutdown
-            python: true
-            helper: true
-            command: python checks/lifecycle_check.py
-          - name: Package integrity and versions
-            python: true
-            helper: true
-            command: |
-              python native/build.py
-              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-              python source/package.py
-              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-              python checks/package_check.py --check integrity
-          - name: Privacy - source and ZIP
-            python: true
-            helper: true
-            command: |
-              python native/build.py
-              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-              python source/package.py
-              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-              python checks/package_check.py --check privacy
-          - name: Native binding API - Swofty 1.9.55
-            native: true
-            command: |
-              New-Item -ItemType Directory -Force .verify | Out-Null
-              $env:TELEMETRY_NATIVE_VIEWS = Join-Path (Get-Location) '.verify/native-views.jsonl'
-              go -C source test -trimpath -count=1 -run '^TestLiveViewAndSetup$' -v
-    env:
-      CGO_ENABLED: '0'
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -83,35 +35,165 @@ jobs:
           go-version: '1.27.4'
           cache: false
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
-        if: matrix.python == true
         with:
           python-version: '3.14'
-      - name: Build Windows helper
-        if: matrix.helper == true
-        working-directory: source
-        run: go build -buildvcs=false -trimpath -ldflags '-H=windowsgui' -o ../bin/telemetry-live.exe .
-      - name: Run check
-        run: ${{ matrix.command }}
-      - name: Check out released Swofty 1.9.55
-        if: matrix.native == true
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Build native DLL and test executables without executing tests
+        run: python native/build.py --build-only
+      - name: Build helper and Go test executable once
+        run: |
+          go -C source build -buildvcs=false -trimpath -o ../bin/telemetry-live.exe .
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          go -C source test -c -trimpath -o ../.verify/go-tests.exe .
+      - name: Package once for integrity and privacy checks
+        run: python source/package.py
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          repository: Swofty-Developments/SwoftyLauncher
-          ref: e69f4d905c404a2615412c1060fdfa2e4b716653
-          path: .verify/launcher
+          name: addon-test-build
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            bin/
+            dist/
+            .verify/go-tests.exe
+            .verify/native/*.exe
+            .verify/native/swofty_core.dll
+
+  checks:
+    name: ${{ matrix.name }}
+    needs: build
+    if: always()
+    runs-on: windows-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        include:
+          - name: Unit tests
+            check: unit
+          - name: Static analysis
+            check: static
+          - name: Launcher protocol compatibility
+            check: protocol
+          - name: Live memory bounds
+            check: memory
+          - name: Live-only acquisition policy
+            check: policy
+          - name: Native game readers
+            check: readers
+          - name: Native publisher lifecycle
+            check: publisher
+          - name: Helper lifecycle and shutdown
+            check: helper
+          - name: Package integrity and versions
+            check: integrity
+          - name: Privacy - source and ZIP
+            check: privacy
+    steps:
+      - name: Require successful shared build
+        run: |
+          if ('${{ needs.build.result }}' -ne 'success') { throw 'Shared build failed; this validation cannot pass.' }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
           persist-credentials: false
-      - name: Compare the vendored native SDK
-        if: matrix.native == true
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.14'
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        if: matrix.check == 'static'
+        with:
+          go-version: '1.27.4'
+          cache: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: addon-test-build
+          path: .
+      - name: Run the individual validation
+        run: python checks/ci_check.py ${{ matrix.check }}
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: matrix.check == 'unit' && success()
+        with:
+          name: live-view-fixtures
+          path: .verify/native-views.jsonl
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+
+  prepare-swofty:
+    name: Prepare Swofty validation tools
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.14'
+      - name: Resolve releases and build each upstream validator once
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python checks/swofty_compat.py prepare
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: swofty-validation-tools
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            .verify/swofty-compat/versions.json
+            .verify/swofty-compat/sdk-baseline.json
+            .verify/swofty-compat/minimum/
+            .verify/swofty-compat/latest/
+
+  swofty:
+    name: ${{ matrix.name }}
+    needs: [build, checks, prepare-swofty]
+    if: always()
+    runs-on: windows-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        include:
+          - name: Swofty manifest - minimum supported
+            release: minimum
+            kind: manifest
+          - name: Swofty launcher views - minimum supported
+            release: minimum
+            kind: views
+          - name: Swofty native SDK - minimum supported
+            release: minimum
+            kind: sdk
+          - name: Swofty manifest - latest stable
+            release: latest
+            kind: manifest
+          - name: Swofty launcher views - latest stable
+            release: latest
+            kind: views
+          - name: Swofty native SDK - latest stable
+            release: latest
+            kind: sdk
+    steps:
+      - name: Require successful preparation
         run: |
-          $ours = (Get-FileHash native/swofty_api.h -Algorithm SHA256).Hash
-          $upstream = (Get-FileHash .verify/launcher/packages/sdk/include/swofty_api.h -Algorithm SHA256).Hash
-          if ($ours -ne $upstream) { throw 'Native SDK differs from the pinned release' }
-      - name: Install Rust required by the pinned launcher
-        if: matrix.native == true
-        run: rustup toolchain install 1.95.0 --profile minimal
-      - name: Validate against the actual launcher API
-        if: matrix.native == true
-        run: |
-          New-Item -ItemType Directory -Force .verify/launcher/packages/addon-api/examples | Out-Null
-          Copy-Item checks/native_api.rs .verify/launcher/packages/addon-api/examples/telemetry_contract.rs
-          cargo +1.95.0 run --locked --manifest-path .verify/launcher/Cargo.toml -p swofty-addon --example telemetry_contract -- .verify/native-views.jsonl .
+          if ('${{ needs.build.result }}' -ne 'success' -or '${{ needs.prepare-swofty.result }}' -ne 'success') { throw 'Preparation failed; this compatibility check cannot pass.' }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.14'
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: swofty-validation-tools
+          path: .verify/swofty-compat
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: matrix.kind == 'views'
+        with:
+          name: live-view-fixtures
+          path: .verify
+      - name: Run the individual Swofty validation
+        run: python checks/swofty_compat.py check --release ${{ matrix.release }} --kind ${{ matrix.kind }}
