@@ -5,7 +5,7 @@ import re
 
 root=Path(__file__).resolve().parents[2]
 m=json.loads((root/'swofty.json').read_text(encoding='utf-8'))
-assert m['version']=='0.5.6' and m['kind']==['native']
+assert m['version']=='0.5.7' and m['kind']==['native']
 assert {o['id'] for o in m['options']}=={'drivers_shown','highlight_player'}
 assert {c['value'] for c in m['options'][0]['values']}=={'nearest','full'}
 assert not any(o.get('hidden',False) for o in m['options'])

@@ -1,5 +1,12 @@
 # F1 Telemetry changelog
 
+## 0.5.7 — 17 November 2026
+
+- Include the PNG add-on icon and declare Steam as the tested platform for the Swofty Addon Browser.
+- Package the browser icon in the same ZIP used for GitHub Releases, with validation to prevent missing browser metadata or artwork.
+- Add publishing instructions for keeping GitHub and Addon Browser packages identical.
+- Retain the 0.5.6 live-only behaviour and compiler/runtime settings. No UDP, recording, analysis or team-logo prototype is added.
+
 ## 0.5.6 — 17 November 2026
 
 - License the add-on under GNU AGPL version 3 or later, retaining the applicable third-party licences and notices.
