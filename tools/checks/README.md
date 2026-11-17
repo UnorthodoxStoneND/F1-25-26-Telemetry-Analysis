@@ -41,3 +41,5 @@ game or copy Swofty's unrelated application, recorder or network test suites.
 
 Normal developer use of native/build.py still builds and runs its native tests.
 The --build-only option is for CI's separately reported test jobs.
+
+The package-integrity check also verifies the bundled browser icon, its size/shape, the description/category/repository fields and Steam compatibility metadata. The packaging script builds one complete ZIP for GitHub and the Addon Browser.

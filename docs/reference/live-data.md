@@ -20,4 +20,4 @@ The DLL publishes a fixed **9 KiB shared-memory snapshot** in Windows. The helpe
 
 The helper exits when Swofty closes its communication pipe. Disabling the add-on clears its display and closes the helper's snapshot handles; Swofty may keep the helper process running. A native component already loaded in a running game remains there until that game closes. Restart the game after enabling, disabling or updating a native add-on.
 
-v0.5.6 writes no telemetry files, images or settings of its own. Swofty manages its profile settings and normal launcher logs. Existing data in **Documents/F1 Game Telemetry** is left untouched, but this live-only version does not open or analyse those recordings. Nothing is uploaded by the add-on.
+v0.5.7 writes no telemetry files, images or settings of its own. Swofty manages its profile settings and normal launcher logs. Existing data in **Documents/F1 Game Telemetry** is left untouched, but this live-only version does not open or analyse those recordings. Nothing is uploaded by the add-on.

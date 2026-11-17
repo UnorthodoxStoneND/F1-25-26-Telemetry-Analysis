@@ -41,6 +41,9 @@ def main():
         for mode in ([],['verified'],['current']):
             run([NATIVE/'publisher_test.exe',NATIVE/'swofty_core.dll',ROOT/'bin/telemetry-live.dll']+mode)
     elif args.check=='helper':run([sys.executable,'tools/checks/lifecycle_check.py'])
+    elif args.check=='privacy':
+        run([sys.executable,'tools/checks/package_privacy_test.py'])
+        run([sys.executable,'tools/checks/package_check.py','--check','privacy'])
     else:run([sys.executable,'tools/checks/package_check.py','--check',args.check])
 
 if __name__=='__main__':main()
