@@ -1,0 +1,160 @@
+{
+  "repository": "Swofty-Developments/SwoftyLauncher",
+  "sha": "0acfa9a423c18e5a9d8eee12ec048ea6f21db418",
+  "validation_jobs": 12,
+  "mapping": [
+    {
+      "upstream": "ci.yml:rust",
+      "checks": [
+        "Swofty Rust (ubuntu-latest)",
+        "Swofty Rust (windows-latest)"
+      ],
+      "steps": [
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+        "actions-rust-lang/setup-rust-toolchain@v2",
+        "Swatinem/rust-cache@v2",
+        "GPUI system libraries",
+        "Format",
+        "Clippy",
+        "Test",
+        "actions/setup-python@v7",
+        "Native chart helper protocol"
+      ]
+    },
+    {
+      "upstream": "ci.yml:swofty-ui",
+      "checks": [
+        "Swofty UI (ubuntu-22.04)",
+        "Swofty UI (windows-latest)"
+      ],
+      "steps": [
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+        "actions/setup-python@v7",
+        "Self-test from source",
+        "Install PyInstaller",
+        "Build the executable",
+        "Self-test the executable",
+        "Upload the executable"
+      ]
+    },
+    {
+      "upstream": "ci.yml:compat",
+      "checks": [
+        "Swofty compatibility gate tool"
+      ],
+      "steps": [
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+        "Unit tests"
+      ]
+    },
+    {
+      "upstream": "ci.yml:installer",
+      "checks": [
+        "Swofty installer (ubuntu-22.04)",
+        "Swofty installer (windows-latest)"
+      ],
+      "steps": [
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+        "actions-rust-lang/setup-rust-toolchain@v2",
+        "Swatinem/rust-cache@v2",
+        "Build",
+        "Upload the executable"
+      ]
+    },
+    {
+      "upstream": "ci.yml:docs",
+      "checks": [
+        "Swofty documentation build"
+      ],
+      "steps": [
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+        "pnpm/setup@v3",
+        "Build"
+      ]
+    },
+    {
+      "upstream": "ci.yml:std",
+      "checks": [
+        "Swofty standard library schemas"
+      ],
+      "steps": [
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+        "Schema tooling tests",
+        "Schema versions",
+        "Registry examples and must-fail cases",
+        "Template data files"
+      ]
+    },
+    {
+      "upstream": "ci.yml:native",
+      "checks": [
+        "Swofty native loader and Wine test"
+      ],
+      "steps": [
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+        "Free disk space on a hosted runner",
+        "Start installing Wine and Xvfb",
+        "RE tools unit tests",
+        "Use every runner core",
+        "Give every xvfb-run its own display",
+        "mlugg/setup-zig@v2",
+        "Zig cache period",
+        "Restore the Zig cache",
+        "Build version.dll and swofty_core.dll",
+        "Wine and Xvfb",
+        "Native tests",
+        "Save the Zig cache"
+      ]
+    },
+    {
+      "upstream": "release-binaries.yml:linux-build",
+      "checks": [
+        "Swofty release binaries - Linux"
+      ],
+      "reuses": "upstream-swofty-ui",
+      "steps": [
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+        "actions-rust-lang/setup-rust-toolchain@v2",
+        "Swatinem/rust-cache@v2",
+        "GPUI system libraries",
+        "Build",
+        "Reuse the tested UI executable",
+        "Restore executable permission",
+        "Bundle the binaries",
+        "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9"
+      ]
+    },
+    {
+      "upstream": "release-binaries.yml:windows-build",
+      "checks": [
+        "Swofty release binaries - Windows"
+      ],
+      "reuses": "upstream-swofty-ui",
+      "steps": [
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+        "actions-rust-lang/setup-rust-toolchain@v2",
+        "Swatinem/rust-cache@v2",
+        "Build",
+        "Reuse the tested UI executable",
+        "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9"
+      ]
+    },
+    {
+      "upstream": "pages.yml:build",
+      "reuses": "upstream-docs",
+      "reason": "Same docs:build validation"
+    },
+    {
+      "upstream": "pages.yml:deploy",
+      "excluded": "Publication, not validation"
+    },
+    {
+      "upstream": "ci.yml:changes",
+      "excluded": "Routing; all mirrored validations run on every pull request"
+    },
+    {
+      "upstream": "ci.yml:ec2 and ec2-cleanup",
+      "excluded": "AWS infrastructure; GitHub-hosted runners used"
+    }
+  ]
+}

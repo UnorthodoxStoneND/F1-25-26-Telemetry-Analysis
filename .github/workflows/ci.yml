@@ -1,64 +1,54 @@
-name: Windows addon checks
-
-on:
-  push:
-    branches: [main]
-  pull_request:
-  workflow_dispatch:
-
+# Upstream validation pinned to Swofty-Developments/SwoftyLauncher@0acfa9a423c18e5a9d8eee12ec048ea6f21db418
+name: Add-on and Swofty validation
 permissions:
   contents: read
-
 concurrency:
   group: addon-checks-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
-
-env:
-  CGO_ENABLED: '0'
-  GOOS: windows
-  GOARCH: amd64
-  GOAMD64: v1
-  GOTOOLCHAIN: local
-  GOWORK: 'off'
-
 jobs:
   build:
     name: Build shared test artifacts
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
-        with:
-          go-version: '1.27.4'
-          cache: false
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
-        with:
-          python-version: '3.14'
-      - name: Build native DLL and test executables without executing tests
-        run: python native/build.py --build-only
-      - name: Build helper and Go test executable once
-        run: |
-          go -C source build -buildvcs=false -trimpath -o ../bin/telemetry-live.exe .
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          go -C source test -c -trimpath -o ../.verify/go-tests.exe .
-      - name: Package once for integrity and privacy checks
-        run: python source/package.py
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-        with:
-          name: addon-test-build
-          include-hidden-files: true
-          if-no-files-found: error
-          retention-days: 7
-          path: |
-            bin/
-            dist/
-            .verify/go-tests.exe
-            .verify/native/*.exe
-            .verify/native/swofty_core.dll
-
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        persist-credentials: false
+    - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+      with:
+        go-version: 1.27.4
+        cache: false
+    - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+      with:
+        python-version: '3.14'
+    - name: Build native DLL and test executables without executing tests
+      run: python native/build.py --build-only
+    - name: Build helper and Go test executable once
+      run: |
+        go -C source build -buildvcs=false -trimpath -o ../bin/telemetry-live.exe .
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        go -C source test -c -trimpath -o ../.verify/go-tests.exe .
+    - name: Package once for integrity and privacy checks
+      run: python source/package.py
+    - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+      with:
+        name: addon-test-build
+        include-hidden-files: true
+        if-no-files-found: error
+        retention-days: 7
+        path: |
+          bin/
+          dist/
+          .verify/go-tests.exe
+          .verify/native/*.exe
+          .verify/native/swofty_core.dll
+    env:
+      CGO_ENABLED: '0'
+      GOOS: windows
+      GOARCH: amd64
+      GOAMD64: v1
+      GOTOOLCHAIN: local
+      GOWORK: 'off'
   checks:
     name: ${{ matrix.name }}
     needs: build
@@ -70,86 +60,101 @@ jobs:
       max-parallel: 4
       matrix:
         include:
-          - name: Unit tests
-            check: unit
-          - name: Static analysis
-            check: static
-          - name: Launcher protocol compatibility
-            check: protocol
-          - name: Live memory bounds
-            check: memory
-          - name: Live-only acquisition policy
-            check: policy
-          - name: Native game readers
-            check: readers
-          - name: Native publisher lifecycle
-            check: publisher
-          - name: Helper lifecycle and shutdown
-            check: helper
-          - name: Package integrity and versions
-            check: integrity
-          - name: Privacy - source and ZIP
-            check: privacy
+        - name: Unit tests
+          check: unit
+        - name: Static analysis
+          check: static
+        - name: Launcher protocol compatibility
+          check: protocol
+        - name: Live memory bounds
+          check: memory
+        - name: Live-only acquisition policy
+          check: policy
+        - name: Native game readers
+          check: readers
+        - name: Native publisher lifecycle
+          check: publisher
+        - name: Helper lifecycle and shutdown
+          check: helper
+        - name: Package integrity and versions
+          check: integrity
+        - name: Privacy - source and ZIP
+          check: privacy
     steps:
-      - name: Require successful shared build
-        run: |
-          if ('${{ needs.build.result }}' -ne 'success') { throw 'Shared build failed; this validation cannot pass.' }
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
-        with:
-          python-version: '3.14'
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
-        if: matrix.check == 'static'
-        with:
-          go-version: '1.27.4'
-          cache: false
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: addon-test-build
-          path: .
-      - name: Run the individual validation
-        run: python checks/ci_check.py ${{ matrix.check }}
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-        if: matrix.check == 'unit' && success()
-        with:
-          name: live-view-fixtures
-          path: .verify/native-views.jsonl
-          include-hidden-files: true
-          if-no-files-found: error
-          retention-days: 7
-
+    - name: Require successful shared build
+      run: |
+        if ('${{ needs.build.result }}' -ne 'success') { throw 'Shared build failed; this validation cannot pass.' }
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        persist-credentials: false
+    - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+      with:
+        python-version: '3.14'
+    - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+      if: matrix.check == 'static'
+      with:
+        go-version: 1.27.4
+        cache: false
+    - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+      with:
+        name: addon-test-build
+        path: .
+    - name: Run the individual validation
+      run: python checks/ci_check.py ${{ matrix.check }}
+    - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+      if: matrix.check == 'unit' && success()
+      with:
+        name: live-view-fixtures
+        path: .verify/native-views.jsonl
+        include-hidden-files: true
+        if-no-files-found: error
+        retention-days: 7
+    env:
+      CGO_ENABLED: '0'
+      GOOS: windows
+      GOARCH: amd64
+      GOAMD64: v1
+      GOTOOLCHAIN: local
+      GOWORK: 'off'
   prepare-swofty:
     name: Prepare Swofty validation tools
     runs-on: windows-latest
     timeout-minutes: 40
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
-        with:
-          python-version: '3.14'
-      - name: Resolve releases and build each upstream validator once
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: python checks/swofty_compat.py prepare
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-        with:
-          name: swofty-validation-tools
-          include-hidden-files: true
-          if-no-files-found: error
-          retention-days: 7
-          path: |
-            .verify/swofty-compat/versions.json
-            .verify/swofty-compat/sdk-baseline.json
-            .verify/swofty-compat/minimum/
-            .verify/swofty-compat/latest/
-
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        persist-credentials: false
+    - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+      with:
+        python-version: '3.14'
+    - name: Resolve releases and build each upstream validator once
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: python checks/swofty_compat.py prepare
+    - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+      with:
+        name: swofty-validation-tools
+        include-hidden-files: true
+        if-no-files-found: error
+        retention-days: 7
+        path: |
+          .verify/swofty-compat/versions.json
+          .verify/swofty-compat/sdk-baseline.json
+          .verify/swofty-compat/minimum/
+          .verify/swofty-compat/latest/
+    env:
+      CGO_ENABLED: '0'
+      GOOS: windows
+      GOARCH: amd64
+      GOAMD64: v1
+      GOTOOLCHAIN: local
+      GOWORK: 'off'
   swofty:
     name: ${{ matrix.name }}
-    needs: [build, checks, prepare-swofty]
+    needs:
+    - build
+    - checks
+    - prepare-swofty
     if: always()
     runs-on: windows-latest
     timeout-minutes: 15
@@ -158,42 +163,394 @@ jobs:
       max-parallel: 4
       matrix:
         include:
-          - name: Swofty manifest - minimum supported
-            release: minimum
-            kind: manifest
-          - name: Swofty launcher views - minimum supported
-            release: minimum
-            kind: views
-          - name: Swofty native SDK - minimum supported
-            release: minimum
-            kind: sdk
-          - name: Swofty manifest - latest stable
-            release: latest
-            kind: manifest
-          - name: Swofty launcher views - latest stable
-            release: latest
-            kind: views
-          - name: Swofty native SDK - latest stable
-            release: latest
-            kind: sdk
+        - name: Swofty manifest - minimum supported
+          release: minimum
+          kind: manifest
+        - name: Swofty launcher views - minimum supported
+          release: minimum
+          kind: views
+        - name: Swofty native SDK - minimum supported
+          release: minimum
+          kind: sdk
+        - name: Swofty manifest - latest stable
+          release: latest
+          kind: manifest
+        - name: Swofty launcher views - latest stable
+          release: latest
+          kind: views
+        - name: Swofty native SDK - latest stable
+          release: latest
+          kind: sdk
     steps:
-      - name: Require successful preparation
-        run: |
-          if ('${{ needs.build.result }}' -ne 'success' -or '${{ needs.prepare-swofty.result }}' -ne 'success') { throw 'Preparation failed; this compatibility check cannot pass.' }
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
-        with:
-          python-version: '3.14'
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: swofty-validation-tools
-          path: .verify/swofty-compat
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        if: matrix.kind == 'views'
-        with:
-          name: live-view-fixtures
-          path: .verify
-      - name: Run the individual Swofty validation
-        run: python checks/swofty_compat.py check --release ${{ matrix.release }} --kind ${{ matrix.kind }}
+    - name: Require successful preparation
+      run: |
+        if ('${{ needs.build.result }}' -ne 'success' -or '${{ needs.prepare-swofty.result }}' -ne 'success') { throw 'Preparation failed; this compatibility check cannot pass.' }
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        persist-credentials: false
+    - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+      with:
+        python-version: '3.14'
+    - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+      with:
+        name: swofty-validation-tools
+        path: .verify/swofty-compat
+    - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+      if: matrix.kind == 'views'
+      with:
+        name: live-view-fixtures
+        path: .verify
+    - name: Run the individual Swofty validation
+      run: python checks/swofty_compat.py check --release ${{ matrix.release }} --kind ${{ matrix.kind }}
+    env:
+      CGO_ENABLED: '0'
+      GOOS: windows
+      GOARCH: amd64
+      GOAMD64: v1
+      GOTOOLCHAIN: local
+      GOWORK: 'off'
+  upstream-rust:
+    name: Swofty Rust (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+        - ubuntu-latest
+        - windows-latest
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        repository: Swofty-Developments/SwoftyLauncher
+        ref: 0acfa9a423c18e5a9d8eee12ec048ea6f21db418
+        persist-credentials: false
+    - uses: actions-rust-lang/setup-rust-toolchain@v2
+      with:
+        cache: false
+    - uses: Swatinem/rust-cache@v2
+      with:
+        add-rust-environment-hash-key: false
+        shared-key: workspace-debug
+        save-if: ${{ github.ref == 'refs/heads/main' }}
+    - name: GPUI system libraries
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y pkg-config libfontconfig-dev libfreetype-dev libwayland-dev \
+          libxkbcommon-dev libxkbcommon-x11-dev libx11-xcb-dev libxcb1-dev libvulkan-dev
+    - name: Format
+      if: runner.os == 'Linux'
+      run: cargo fmt --all --check
+    - name: Clippy
+      run: cargo clippy --workspace --all-targets -- -D warnings
+    - name: Test
+      run: cargo test --workspace --no-fail-fast
+    - uses: actions/setup-python@v7
+      with:
+        python-version: '3.14'
+    - name: Native chart helper protocol
+      run: |
+        cargo build -p swofty-addon --example native_charts
+        python tools/native-charts/protocol-smoke.py target/debug/examples/native_charts
+    timeout-minutes: 120
+  upstream-swofty-ui:
+    name: Swofty UI (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+        - ubuntu-22.04
+        - windows-latest
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        repository: Swofty-Developments/SwoftyLauncher
+        ref: 0acfa9a423c18e5a9d8eee12ec048ea6f21db418
+        persist-credentials: false
+    - uses: actions/setup-python@v7
+      with:
+        python-version: '3.14'
+    - name: Self-test from source
+      run: python tools/swofty-ui/serve.py --self-test
+    - name: Install PyInstaller
+      run: python -m pip install pyinstaller==6.22.3
+    - name: Build the executable
+      run: python tools/swofty-ui/build.py
+    - name: Self-test the executable
+      run: dist/swofty-ui/swofty-ui --self-test
+    - name: Upload the executable
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+      with:
+        name: swofty-ui-${{ runner.os }}
+        path: dist/swofty-ui/swofty-ui*
+        if-no-files-found: error
+        retention-days: 7
+    timeout-minutes: 120
+  upstream-compat:
+    name: Swofty compatibility gate tool
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        repository: Swofty-Developments/SwoftyLauncher
+        ref: 0acfa9a423c18e5a9d8eee12ec048ea6f21db418
+        persist-credentials: false
+    - name: Unit tests
+      run: python3 -m unittest discover -s tools/compat/tests -t tools/compat
+    timeout-minutes: 120
+  upstream-installer:
+    name: Swofty installer (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+        - ubuntu-22.04
+        - windows-latest
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        repository: Swofty-Developments/SwoftyLauncher
+        ref: 0acfa9a423c18e5a9d8eee12ec048ea6f21db418
+        persist-credentials: false
+    - uses: actions-rust-lang/setup-rust-toolchain@v2
+      with:
+        cache: false
+    - uses: Swatinem/rust-cache@v2
+      with:
+        add-rust-environment-hash-key: false
+        shared-key: installer-release
+        save-if: ${{ github.ref == 'refs/heads/main' }}
+    - name: Build
+      run: cargo build --release -p swofty-launcher-installer
+    - name: Upload the executable
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+      with:
+        name: installer-${{ runner.os }}
+        path: |
+          target/release/swofty-launcher-installer
+          target/release/swofty-launcher-installer.exe
+        if-no-files-found: error
+        retention-days: 7
+    timeout-minutes: 120
+  upstream-docs:
+    name: Swofty documentation build
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        repository: Swofty-Developments/SwoftyLauncher
+        ref: 0acfa9a423c18e5a9d8eee12ec048ea6f21db418
+        persist-credentials: false
+    - uses: pnpm/setup@v3
+      with:
+        runtime: node@24
+        cache: true
+        save-cache: ${{ github.ref == 'refs/heads/main' }}
+        require-lockfile: true
+    - name: Build
+      run: pnpm --filter @f1modmanager/docs docs:build
+    timeout-minutes: 120
+  upstream-std:
+    name: Swofty standard library schemas
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        fetch-depth: 0
+        repository: Swofty-Developments/SwoftyLauncher
+        ref: 0acfa9a423c18e5a9d8eee12ec048ea6f21db418
+        persist-credentials: false
+    - name: Schema tooling tests
+      run: python3 -m unittest discover -s tools/std/tests
+    - name: Schema versions
+      env:
+        BASE: 0acfa9a423c18e5a9d8eee12ec048ea6f21db418
+      run: python3 tools/std/schemacheck.py --released-before "$(git merge-base "$BASE" HEAD)"
+    - name: Registry examples and must-fail cases
+      run: python3 tools/std/validate.py
+    - name: Template data files
+      run: python3 tools/std/templates.py --no-build
+    timeout-minutes: 120
+  upstream-native:
+    name: Swofty native loader and Wine test
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        repository: Swofty-Developments/SwoftyLauncher
+        ref: 0acfa9a423c18e5a9d8eee12ec048ea6f21db418
+        persist-credentials: false
+    - name: Free disk space on a hosted runner
+      run: |
+        df -h /
+        if [ "$RUNNER_ENVIRONMENT" = github-hosted ]; then
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/.ghcup
+          df -h /
+        fi
+    - name: Start installing Wine and Xvfb
+      run: |
+        (
+          set +e
+          sudo dpkg --add-architecture i386 &&
+            sudo apt-get update &&
+            sudo apt-get install -y wine64 wine xvfb
+          echo $? > "$RUNNER_TEMP/wine-install.status"
+        ) > "$RUNNER_TEMP/wine-install.log" 2>&1 &
+    - name: RE tools unit tests
+      run: python3 -m unittest discover -s re/tools/tests
+    - name: Use every runner core
+      run: |
+        mkdir -p "$RUNNER_TEMP/bin"
+        cat > "$RUNNER_TEMP/bin/taskset" <<'EOF'
+        #!/bin/sh
+        [ "$1" = -c ] && shift 2
+        exec "$@"
+        EOF
+        chmod +x "$RUNNER_TEMP/bin/taskset"
+        echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+    - name: Give every xvfb-run its own display
+      run: |
+        cat > "$RUNNER_TEMP/bin/xvfb-run" <<'EOF'
+        #!/bin/bash
+        while [ "${1:-}" = -a ] || [ "${1:-}" = --auto-servernum ]; do shift; done
+        n=$(flock "$RUNNER_TEMP/xvfb.lock" bash -c 'f=$RUNNER_TEMP/xvfb.next; n=$(cat "$f" 2>/dev/null || echo 100); echo $((n + 1)) > "$f"; echo "$n"')
+        Xvfb ":$n" -screen 0 1280x1024x24 -nolisten tcp >/dev/null 2>&1 &
+        x=$!
+        for _ in $(seq 200); do [ -S "/tmp/.X11-unix/X$n" ] && break; sleep 0.05; done
+        DISPLAY=":$n" "$@"
+        rc=$?
+        kill "$x" 2>/dev/null
+        wait "$x" 2>/dev/null
+        exit $rc
+        EOF
+        chmod +x "$RUNNER_TEMP/bin/xvfb-run"
+    - uses: mlugg/setup-zig@v2
+      with:
+        version: 0.16.0
+        use-cache: false
+        use-tool-cache: true
+    - name: Zig cache period
+      id: zig-period
+      run: echo "month=$(date -u +%Y-%m)" >> "$GITHUB_OUTPUT"
+    - name: Restore the Zig cache
+      id: zig-cache
+      uses: actions/cache/restore@v6
+      with:
+        path: |
+          native/build/zig-cache
+        key: zig-${{ runner.os }}-0.16.0-${{ steps.zig-period.outputs.month }}-${{ hashFiles('native/**', 'addons/*/native/**', 'packages/sdk/include/**')
+          }}
+        restore-keys: zig-${{ runner.os }}-0.16.0-${{ steps.zig-period.outputs.month }}-
+    - name: Build version.dll and swofty_core.dll
+      run: native/build.sh
+    - name: Wine and Xvfb
+      timeout-minutes: 10
+      run: |
+        while [ ! -f "$RUNNER_TEMP/wine-install.status" ]; do sleep 2; done
+        cat "$RUNNER_TEMP/wine-install.log"
+        exit "$(cat "$RUNNER_TEMP/wine-install.status")"
+    - name: Native tests
+      run: |
+        df -h / "$RUNNER_TEMP"
+        trap 'df -h / "$RUNNER_TEMP"' EXIT
+        native/test/run_ci_tests.sh
+    - name: Save the Zig cache
+      if: github.ref == 'refs/heads/main' && steps.zig-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v6
+      with:
+        path: |
+          native/build/zig-cache
+        key: ${{ steps.zig-cache.outputs.cache-primary-key }}
+    timeout-minutes: 120
+  upstream-release-linux:
+    name: Swofty release binaries - Linux
+    runs-on: ubuntu-22.04
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        ref: 0acfa9a423c18e5a9d8eee12ec048ea6f21db418
+        repository: Swofty-Developments/SwoftyLauncher
+        persist-credentials: false
+    - uses: actions-rust-lang/setup-rust-toolchain@v2
+      with:
+        cache: false
+    - uses: Swatinem/rust-cache@v2
+      with:
+        add-rust-environment-hash-key: false
+        shared-key: release
+        save-if: ${{ github.ref == 'refs/heads/main' }}
+    - name: GPUI system libraries
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y pkg-config libfontconfig-dev libfreetype-dev libwayland-dev \
+          libxkbcommon-dev libxkbcommon-x11-dev libx11-xcb-dev libxcb1-dev libvulkan-dev
+    - name: Build
+      run: cargo build --release -p swofty-cli -p swofty-launcher
+      env:
+        SWOFTY_LOGS_URL: https://api.f1.swofty.net/v1/logs
+        SWOFTY_USAGE_URL: https://api.f1.swofty.net
+    - name: Reuse the tested UI executable
+      uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+      with:
+        name: swofty-ui-Linux
+        path: dist/swofty-ui
+    - name: Restore executable permission
+      run: chmod +x dist/swofty-ui/swofty-ui
+    - name: Bundle the binaries
+      run: tar cf linux-binaries.tar target/release/swofty target/release/swofty-launcher dist/swofty-ui/swofty-ui
+    - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+      with:
+        name: linux-binaries
+        path: linux-binaries.tar
+        if-no-files-found: error
+        retention-days: 7
+    timeout-minutes: 120
+    needs: upstream-swofty-ui
+  upstream-release-windows:
+    name: Swofty release binaries - Windows
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        ref: 0acfa9a423c18e5a9d8eee12ec048ea6f21db418
+        repository: Swofty-Developments/SwoftyLauncher
+        persist-credentials: false
+    - uses: actions-rust-lang/setup-rust-toolchain@v2
+      with:
+        cache: false
+    - uses: Swatinem/rust-cache@v2
+      with:
+        add-rust-environment-hash-key: false
+        shared-key: release
+        save-if: ${{ github.ref == 'refs/heads/main' }}
+    - name: Build
+      run: cargo build --release -p swofty-cli -p swofty-launcher
+      env:
+        SWOFTY_LOGS_URL: https://api.f1.swofty.net/v1/logs
+        SWOFTY_USAGE_URL: https://api.f1.swofty.net
+    - name: Reuse the tested UI executable
+      uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+      with:
+        name: swofty-ui-Windows
+        path: dist/swofty-ui
+    - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+      with:
+        name: windows-binaries
+        path: |
+          target/release/swofty.exe
+          target/release/swofty-launcher.exe
+          dist/swofty-ui/swofty-ui.exe
+        if-no-files-found: error
+        retention-days: 7
+    timeout-minutes: 120
+    needs: upstream-swofty-ui
+'on':
+  push:
+    branches:
+    - main
+  pull_request: null
+  workflow_dispatch: null
+env:
+  CARGO_TERM_COLOR: always
