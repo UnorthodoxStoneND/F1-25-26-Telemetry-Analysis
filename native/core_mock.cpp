@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Host-test core only. Never loaded into the game or included as a runtime DLL.
 #include "swofty_api.h"
 namespace {

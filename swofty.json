@@ -5,7 +5,7 @@
   "version": "0.5.5",
   "author": "UnorthodoxStoneNDmodding",
   "description": "Live driver positions, tyres, wear, lap times and car setups, read from the game through Swofty's binding system. Live display only; no UDP or recording.",
-  "license": "MIT",
+  "license": "AGPL-3.0-or-later",
   "repository": "https://github.com/UnorthodoxStoneND/F1-25-26-Telemetry-Analysis",
   "category": "utility",
   "kind": ["native"],
