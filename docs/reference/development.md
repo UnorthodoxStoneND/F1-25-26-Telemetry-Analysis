@@ -42,7 +42,7 @@ See [CI validation](../../tools/checks/README.md) for the shared-artifact pipeli
 | `tools/checks/` | Validation tools, launcher compatibility probes and CI reference |
 | `docs/guide/` | Installation and user guidance |
 | `docs/reference/` | Runtime behaviour, compatibility and development |
-| `.github/` | CI workflow, pull request template and dependency updates |
+| `.github/` | CI workflow |
 | `swofty.json` | Add-on manifest and launcher settings |
 | `CHANGELOG.md` | Version history |
 | `bin/`, `dist/`, `.verify/` | Ignored build, package and verification output |
