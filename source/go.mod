@@ -1,4 +1,4 @@
-module UnorthodoxStoneNDmodding/udp-telemetry
+module telemetry-live
 
 go 1.24
 

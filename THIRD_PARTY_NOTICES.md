@@ -35,3 +35,9 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
+# Swofty SDK
+
+`native/swofty_api.h` is from Swofty Launcher release v1.9.55, commit
+`e69f4d905c404a2615412c1060fdfa2e4b716653`. It is MIT-licensed, copyright
+2026 Jacob Nardella (Swofty). The complete notice is in `native/SDK-LICENSE.txt`.
+No Swofty core implementation is bundled in this add-on.

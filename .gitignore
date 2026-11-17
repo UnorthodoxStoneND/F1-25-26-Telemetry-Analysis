@@ -4,6 +4,10 @@
 /.verify/
 /.gocache/
 *.exe
+*.dll
+*.obj
+*.lib
+*.exp
 *.pdb
 *.test
 coverage.out

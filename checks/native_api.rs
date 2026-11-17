@@ -1,37 +1,29 @@
-//! CI-only validator, compiled inside a pinned upstream launcher checkout.
+//! Validate live views and the manifest with the actual released launcher types.
 use std::io::{BufRead, BufReader};
-use swofty_addon::view::{Chart, View};
+use swofty_addon::{manifest::AddonManifest, view::View};
 
-fn walk(value: &serde_json::Value, count: &mut usize) -> Result<(), String> {
+fn walk(value: &serde_json::Value, tables: &mut usize, colours: &mut usize) {
     match value {
         serde_json::Value::Object(map) => {
-            if map.contains_key("image") {
-                return Err("image control emitted by native telemetry".into());
-            }
-            if let Some(value) = map.get("chart") {
-                let chart: Chart = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
-                chart.validate().map_err(|e| format!("{}: {e}", chart.id))?;
-                *count += 1;
-            }
-            for child in map.values() { walk(child, count)?; }
+            assert!(!map.contains_key("image") && !map.contains_key("chart"));
+            if map.contains_key("table") { *tables += 1; }
+            if map.contains_key("colour") { *colours += 1; }
+            for child in map.values() { walk(child, tables, colours); }
         }
-        serde_json::Value::Array(values) => for child in values { walk(child, count)?; },
+        serde_json::Value::Array(values) => for child in values { walk(child, tables, colours); },
         _ => {}
     }
-    Ok(())
 }
-
 fn main() {
-    let mut views = 0;
-    let mut charts = 0;
-    for path in std::env::args().skip(1) {
-        for line in BufReader::new(std::fs::File::open(path).expect("views file")).lines() {
-            let value: serde_json::Value = serde_json::from_str(&line.expect("read view")).expect("view JSON");
-            let _: View = serde_json::from_value(value.clone()).expect("launcher view schema");
-            walk(&value, &mut charts).expect("native chart contract");
-            views += 1;
-        }
+    let args: Vec<_> = std::env::args().skip(1).collect();
+    let mut views=0; let mut tables=0; let mut colours=0;
+    for line in BufReader::new(std::fs::File::open(&args[0]).expect("views file")).lines() {
+        let value: serde_json::Value = serde_json::from_str(&line.expect("view line")).expect("view JSON");
+        let _: View = serde_json::from_value(value.clone()).expect("released launcher view schema");
+        walk(&value, &mut tables, &mut colours); views+=1;
     }
-    assert!(views > 0 && charts > 0, "No native chart views validated");
-    println!("PASS: {views} complete views and {charts} charts accepted by the pinned launcher API; no image controls");
+    let manifest=AddonManifest::load(std::path::Path::new(&args[1])).expect("released manifest schema");
+    manifest.validate().expect("valid native add-on manifest");
+    assert!(views>=2 && tables>=3 && colours>0);
+    println!("PASS: {views} live views, {tables} native tables and {colours} colour controls; valid native manifest");
 }
