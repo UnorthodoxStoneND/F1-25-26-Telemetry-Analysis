@@ -1,8 +1,10 @@
-# F1 25/26 Telemetry & Analysis [Swofty Add-On]
+# F1 25/26 Live Telemetry [Swofty Add-On]
 
 ## Description
 
-**v0.5.5 is a live-display-only test build.** View current driver positions, tyres, wear, lap times and car setups inside Swofty. It prefers Swofty's cached Live State API for supported fields and uses read-only game-engine readers through Swofty's named binding system for the remaining values. It contains no UDP receiver, UDP fallback, session recorder or Telemetry Analysis page.
+**v0.5.5 provides live telemetry inside Swofty** for F1 25 and the 2026 Season Pack, including My Team. Follow driver positions, tyres, wear and completed lap times, then expand a driver's row to inspect the car's setup.
+
+Data comes directly from Swofty's Live State API and checked game bindings. **No UDP configuration is needed: this version has no UDP receiver or fallback, recording or analysis page.** Existing 0.4.x recordings are left untouched, but cannot be reviewed in this version. Keep version 0.4.2 if recording and post-session analysis are needed.
 
 ## Features
 
@@ -11,14 +13,14 @@
 - A highlighted **PIT** marker beside a driver's name while that car is in the pit lane. It follows the game's lane-membership reading, including a stationary pit stop; a missing reading does not fabricate a marker.
 - Individual FL, FR, RL and RR wear bars and percentages, plus the average when all four readings are available.
 - Last completed lap and best valid lap for each driver. Unavailable values appear as a dash.
-- A setup control beneath each driver's row showing the player-facing setup values that can be read. Fuel is labelled **Fuel remaining**, because the live tank reading is not the original setup fuel load.
+- A setup control beneath each driver's row showing wings, differentials, camber, toe, suspension, anti-roll bars, ride heights, brakes, all four configured tyre pressures and fuel remaining. Unavailable readings show a dash. Fuel remaining is the current tank value, rather than the original setup fuel load.
 - Optional highlighting of your own row. Display settings are in Swofty's add-on settings.
 - Driver, wear and lap-time columns automatically share the available width when the launcher is resized or maximised. Narrow windows can still truncate content; maximising gives these columns more room.
 - The table stays empty at the career trackside workstation and during session loading/unloading. Values appear in the actual session's garage or grid. Pausing an active session retains current values. Session end/unload clears them; closing the game releases the shared snapshot.
 
 ## Install guide
 
-1. Use **`F1_Telemetry_v0.5.5.zip`** from the test-build distribution. Use the named ZIP, rather than GitHub's automatic Source code download. The add-on is not listed in Swofty's Addon Browser.
+1. Download **`F1_Telemetry_v0.5.5.zip`** from [GitHub Releases](https://github.com/UnorthodoxStoneND/F1-25-26-Telemetry-Analysis/releases). Use the named ZIP, rather than GitHub's automatic Source code download. The add-on is not listed in Swofty's Addon Browser.
 2. Close the game. In Swofty, open **Addons → Install addon from computer** and select the ZIP.
 3. Enable **F1 Live Telemetry** in your active profile. Configure **Drivers shown** and **Highlight my row** in its settings.
 4. Restart Swofty after replacing an earlier version, then launch the game through Swofty so its native component is loaded. Open **Live Telemetry** in the launcher.
@@ -43,7 +45,7 @@ v0.5.5 writes no telemetry files, images or settings of its own. Swofty manages 
 - **Launcher:** Swofty 1.9.55 and compatible later versions retaining launcher API 1, native binding API 9, session callbacks and memory-check API 1. No maximum launcher version is imposed; future breaking API changes may require an update.
 - **Game:** F1 25 on Steam, including the 2026 Season Pack and My Team. Object readers support the inspected Steam layouts with PE timestamps `1789118616` and `1794312636`. Swofty resolves the addresses for the running build; object ownership, vehicle identity and vector bounds are checked before values are shown. Unsupported builds or missing bindings produce an explicit message.
 
-The native component and helper have automated host tests, including a core with no snapshot-service export. The current executable's timing and driver-name access paths were inspected statically; in-game verification of this corrected acquisition path is still required before release.
+Automated checks cover the live readers, Live State fallback, session transitions, completed lap timing, tyre-pressure wheel order, shared-memory format and launcher views. In-game testing confirmed setup values display for all cars, with the player's values checked against the game. Resource improvements have not been measured across every supported build.
 
 ## Build from source
 
@@ -57,4 +59,4 @@ $env:GOAMD64 = "v1"
 go -C source build -buildvcs=false -trimpath -ldflags "-H=windowsgui" -o ../bin/telemetry-live.exe .
 ```
 
-The Go helper retains symbols and DWARF debug information; path trimming removes local build paths. The native DLL build remains unchanged. Create the installable test ZIP with `python source/package.py`. The compiler and debug-information changes do not add UDP acquisition and do not establish antivirus clearance for this new executable or DLL.
+The Go helper retains symbols and DWARF debug information; path trimming removes local build paths. The native DLL build remains unchanged. Create the installable ZIP with `python source/package.py`. Antivirus results for earlier 0.4.x releases do not cover this executable or DLL.

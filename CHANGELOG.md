@@ -1,10 +1,11 @@
 # F1 Telemetry changelog
 
-## 0.5.5 — 16 November 2026
+## 0.5.5 — 17 November 2026
 
 - Correct tyre-pressure acquisition: read each suspension wheel's configured pressure at `+0x9c`, as written by the game's setup setter, instead of the derived spring coefficient at `+0x64`.
 - Add regressions for all four corners on player and other cars, wheel-to-display order, unit normalisation, invalid/missing readings and the real DLL's published shared snapshot. Preserve unavailable values as unknown.
-- Retain Go 1.27.4, symbols/debug information and the existing live-only acquisition path. No UDP, recording or analysis is introduced. In-game pressure confirmation remains required.
+- Retain Go 1.27.4, symbols/debug information and the existing live-only acquisition path. No UDP, recording or analysis is introduced.
+- In-game testing confirmed setups display for all cars and the player's values match the game. Update the README with installation, live features and the change from 0.4.x recording/analysis to live display only.
 
 ## 0.5.4 — 16 November 2026
 
@@ -41,6 +42,19 @@
 - Retain full-grid/nearest-car selection, optional player highlighting, native tyre circles, four wear bars and average wear, last/best lap times, and setup cards beneath driver rows.
 - Retain paused values and clear the display on explicit session end/unload or game exit. Leave unavailable fields unknown; gate direct readers and timing hooks to the inspected Steam game layout.
 - Write no recordings or generated images. Document the helper process and in-game native DLL. In-game validation is still required before release.
+
+## 0.4.2 — 16 November 2026
+
+- Retain standard Go symbols and DWARF debug information by removing the `-s -w` linker flags. Keep Go 1.27.4, path trimming and the Windows GUI subsystem.
+- Keep telemetry, recording, analysis and read-only team-name behavior unchanged.
+- Record controlled build comparisons: retaining debug information clears CrowdStrike in both the empty control and the full 0.4.2 helper. Bkav still flags the helper; complete antivirus clearance is not claimed.
+
+## 0.4.1 — 16 November 2026
+
+- Rebuild the verified v0.4.0 UDP telemetry and analysis add-on with an updated stable Go toolchain.
+- Keep telemetry, recording, analysis and read-only team-name behavior unchanged.
+- Retain source, reproducible build settings and release checksums for verification.
+- This maintenance rebuild does not guarantee that third-party antivirus detections will clear.
 
 ## 0.4.0 — 15 November 2026
 
