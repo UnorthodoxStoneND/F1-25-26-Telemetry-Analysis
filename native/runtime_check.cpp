@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 // Build/test preflight only. No game is launched and no system files are changed.
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>

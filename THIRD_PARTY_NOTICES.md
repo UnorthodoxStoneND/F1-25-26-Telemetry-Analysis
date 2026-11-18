@@ -1,6 +1,6 @@
 # Third-party notices
 
-The add-on’s first-party source is licensed under GNU AGPL version 3 or later; see LICENSE. The following third-party components retain their own licences and copyright notices.
+The add-on’s first-party source is licensed under the MIT License; see LICENSE. The following third-party components retain their own licences and copyright notices.
 
 ## Go runtime and standard library — BSD-3-Clause
 
@@ -277,14 +277,18 @@ Software.
 
 The native DLL dynamically uses Microsoft’s Visual C++ v14 x64 Redistributable and the Windows Universal CRT. Microsoft runtime DLLs and their installer are not bundled; install or repair the official runtime as described in README.md.
 
-These Microsoft components are licensed separately under their applicable Microsoft terms; they are not relicensed as AGPL by this project.
+These Microsoft components are licensed separately under their applicable Microsoft terms; they are not relicensed by this project.
 
 Reference: https://learn.microsoft.com/en-us/cpp/windows/redistributing-visual-cpp-files
 
 ## Swofty Launcher — separately installed dependency
 
-Swofty Launcher is licensed under GNU AGPL version 3 or later, with separate SDK/template exceptions and third-party notices. No Swofty core implementation, launcher binary, SafetyHook or Zydis implementation is bundled in this add-on. The bundled SDK header is covered by the MIT notice above.
+As checked on 18 November 2026, Swofty Launcher’s current main branch uses the PolyForm Noncommercial License 1.0.0, copyright Swofty Pty Ltd (ACN 665 787 244). Its plugin SDK and add-on template remain MIT-licensed. No Swofty core implementation, launcher binary, SafetyHook or Zydis implementation is bundled in this add-on. The bundled SDK header is covered by the MIT notice above.
 
-Upstream licence: https://github.com/Swofty-Developments/SwoftyLauncher/blob/e69f4d905c404a2615412c1060fdfa2e4b716653/LICENSE
+Current upstream licence: https://github.com/Swofty-Developments/SwoftyLauncher/blob/main/LICENSE
+
+SDK licence: https://github.com/Swofty-Developments/SwoftyLauncher/blob/main/packages/sdk/LICENSE
+
+Add-on template licence: https://github.com/Swofty-Developments/SwoftyLauncher/blob/main/templates/addon/LICENSE
 
 Build/test tools such as Go, Python, Rust, Visual Studio and GitHub Actions are not bundled as tools in the installable ZIP. Their use during development does not change the licences of the components listed above.

@@ -9,7 +9,7 @@ Before building, update the version in `swofty.json` and `source/main.go`, the c
 - A non-empty description, category `utility`, and the public source `repository` URL in `swofty.json`.
 - `icon` naming the included PNG/JPG/WebP artwork (not SVG), no larger than 2 MB. The current square artwork is `icon.png`.
 - `compat.platforms: ["steam"]`, reflecting the game platform tested. Keep the launcher compatibility requirement and core dependency.
-- The compiled helper and native DLL, first-party source, build scripts, README, AGPL licence and applicable third-party notices.
+- The compiled helper and native DLL, first-party source, build scripts, README, MIT licence and applicable third-party notices.
 
 The packaging script includes the manifest's icon. The existing package-integrity check verifies the icon, metadata and archive contents, so missing browser requirements fail the same CI job used for GitHub packaging. No extra parallel CI job is needed.
 
@@ -34,6 +34,6 @@ Do not distribute the experimental launcher/team-logo prototype as part of this 
 
 Creators need the Addon Creator role and publish at https://publish.f1.swofty.net. Upload the **same ZIP** attached to GitHub, supply the description and version changelog, and review the ownership/redistribution confirmation before submitting it yourself. The entry remains pending until reviewed. Treat an approved version's changelog as immutable and put later corrections in the next version.
 
-The normal external VC++ v14 x64 runtime requirement remains the same as Swofty's. No runtime installer or game archives are bundled. The shared archive includes the code's AGPL licence and third-party notices.
+The normal external VC++ v14 x64 runtime requirement remains the same as Swofty's. No runtime installer or game archives are bundled. The shared archive includes the code's MIT licence and third-party notices.
 
 Reference: https://f1.swofty.net/reference/addons/publishing and https://f1.swofty.net/reference/addons/manifest.

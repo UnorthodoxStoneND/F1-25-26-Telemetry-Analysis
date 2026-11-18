@@ -2,6 +2,8 @@
 
 ## 0.5.8 — 18 November 2026
 
+- Release the add-on’s first-party code under MIT, updating the manifest, source identifiers and package checks while preserving third-party notices. Earlier packages retain their original licence notices.
+
 - Show DNF for did-not-finish and retired cars, and DSQ for disqualified cars, taking priority over PIT.
 - Read result status through the Live State API with a checked native binding fallback.
 - Mute affected rows and wear bars, including the player row; retain tyre colours and setup controls. Whole-row opacity requires launcher support.

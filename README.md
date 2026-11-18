@@ -42,7 +42,7 @@ See the [development guide](https://github.com/UnorthodoxStoneND/F1-25-26-Teleme
 
 ## Licence
 
-Copyright (C) 2026 UnorthodoxStoneNDmodding. Licensed under the [GNU Affero General Public License, version 3 or later](LICENSE) (`AGPL-3.0-or-later`).
+Copyright (C) 2026 UnorthodoxStoneNDmodding. Licensed under the [MIT License](LICENSE) (`MIT`).
 
 Third-party components retain their own licences: Go runtime and standard library (BSD-3-Clause), Swofty SDK (MIT), and Microsoft C++ Standard Library (Apache-2.0 WITH LLVM-exception). See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and [native/SDK-LICENSE.txt](native/SDK-LICENSE.txt) for notices and Microsoft runtime details.
 
