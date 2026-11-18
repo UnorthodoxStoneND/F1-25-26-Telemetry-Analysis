@@ -8,13 +8,14 @@ import (
 	"strings"
 )
 
-const frameSize = 9216
+const frameSize = 9984
+const carSize = 304
 const maxCars = 32
 const (
-	active      = 1
-	paused      = 2
-	apiReady    = 4
-	directReady = 8
+	active       = 1
+	paused       = 2
+	sessionTimer = 128
+	sessionLaps  = 256
 )
 const (
 	knownName     = 1
@@ -25,6 +26,9 @@ const (
 	knownBest     = 32
 	knownPit      = 64
 	knownResult   = 128
+	knownLaps     = 256
+	knownGapAhead = 512
+	knownSectors  = 1024
 )
 const inPitLane = 2
 const resultMask = 7 << 8
@@ -36,14 +40,20 @@ type Car struct {
 	Wear                              [4]float32
 	Setup                             [21]float32
 	Name                              string
+	BadgePNG                          string
 	Flags                             uint32
 	Identity                          uint64
+	Laps                              uint32
+	GapAhead                          int32
+	BestSectors                       [3]uint32
 }
 type Frame struct {
 	Session, Tick uint64
 	State         uint32
 	Player        int32
 	SessionType   uint32
+	SessionKind   uint32
+	Progress      uint32
 	Diagnostic    string
 	Cars          []Car
 }
@@ -59,7 +69,7 @@ func decode(b []byte) (Frame, error) {
 }
 func decodeInto(b []byte, storage []Car) (Frame, error) {
 	f := Frame{Player: -1}
-	if len(b) != frameSize || string(b[:8]) != "USTLIVE1" || binary.LittleEndian.Uint32(b[8:]) != 1 || binary.LittleEndian.Uint32(b[12:]) != frameSize {
+	if len(b) != frameSize || string(b[:8]) != "USTLIVE2" || binary.LittleEndian.Uint32(b[8:]) != 2 || binary.LittleEndian.Uint32(b[12:]) != frameSize {
 		return f, fmt.Errorf("incompatible live snapshot")
 	}
 	u := func(n int) uint32 { return binary.LittleEndian.Uint32(b[n:]) }
@@ -68,6 +78,8 @@ func decodeInto(b []byte, storage []Car) (Frame, error) {
 	f.State = u(40)
 	f.Player = int32(u(44))
 	f.SessionType = u(52)
+	f.SessionKind = u(56)
+	f.Progress = u(60)
 	f.Diagnostic = cstring(b[64:256])
 	count := u(48)
 	if count > maxCars {
@@ -76,12 +88,34 @@ func decodeInto(b []byte, storage []Car) (Frame, error) {
 	f.Cars = storage[:0]
 	seen := uint32(0)
 	for n := 0; n < int(count); n++ {
-		at := 256 + 280*n
+		at := 256 + carSize*n
 		c := Car{Vehicle: u(at), Known: u(at + 4), Position: int32(u(at + 8)), Grid: int32(u(at + 12)), Compound: int32(u(at + 16)), Visual: int32(u(at + 20)), Last: u(at + 24), Best: u(at + 28), WearKnown: u(at + 32), SetupKnown: u(at + 36), Name: cstring(b[at+140 : at+268]), Flags: u(at + 268), Identity: binary.LittleEndian.Uint64(b[at+272:])}
 		if c.Vehicle >= maxCars || seen&(1<<c.Vehicle) != 0 {
 			return Frame{}, fmt.Errorf("invalid vehicle identity")
 		}
 		seen |= 1 << c.Vehicle
+		c.Laps = u(at + 280)
+		c.GapAhead = int32(u(at + 284))
+		for i := range c.BestSectors {
+			c.BestSectors[i] = u(at + 288 + 4*i)
+		}
+		if c.Laps >= 1000 {
+			c.Known &^= knownLaps
+		}
+		if c.GapAhead < 0 || c.GapAhead > 10800000 {
+			c.Known &^= knownGapAhead
+		}
+		var total uint64
+		for _, ms := range c.BestSectors {
+			if ms == 0 || ms >= 3600000 {
+				c.Known &^= knownSectors
+			}
+			total += uint64(ms)
+		}
+		difference := int64(total) - int64(c.Best)
+		if c.Known&knownBest == 0 || c.Best == 0 || difference < -10 || difference > 10 {
+			c.Known &^= knownSectors
+		}
 		for i := range c.Wear {
 			c.Wear[i] = math.Float32frombits(u(at + 40 + 4*i))
 			if !finite(c.Wear[i]) || c.Wear[i] < 0 || c.Wear[i] > 100 {

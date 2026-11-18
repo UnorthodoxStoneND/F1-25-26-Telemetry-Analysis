@@ -1,6 +1,7 @@
 """Execute one individually reported CI check against shared build artifacts."""
 from pathlib import Path
 import argparse
+import json
 import os
 import re
 import subprocess
@@ -8,7 +9,7 @@ import sys
 
 ROOT=Path(__file__).resolve().parents[2]
 NATIVE=ROOT/'.verify/native'
-DEDICATED={'TestReleasedAndFutureLauncherHandshake','TestBoundedLiveMemory','TestNativeABI'}
+DEDICATED={'TestReleasedAndFutureLauncherHandshake','TestBoundedLiveMemory','TestNativeABI','TestNativeBadgesABI'}
 
 def run(args,env=None):
     subprocess.run([str(a) for a in args],cwd=ROOT,env=env,check=True,timeout=180)
@@ -17,9 +18,12 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('check',choices=('unit','static','protocol','memory','policy','readers','publisher','helper','integrity','privacy'))
     args=parser.parse_args()
+    version=json.loads((ROOT/'swofty.json').read_text())['version']
+    archive=ROOT/'dist'/f'F1_Telemetry_v{version}.zip'
     test=ROOT/'.verify/go-tests.exe'
     env=dict(os.environ,TELEMETRY_NATIVE_VIEWS=str(ROOT/'.verify/native-views.jsonl'))
     if args.check=='unit':
+        run([sys.executable,'tools/checks/package_test.py'])
         listed=subprocess.check_output([str(test),'-test.list','^Test'],cwd=ROOT,text=True)
         names=[n for n in listed.splitlines() if n.startswith('Test') and n not in DEDICATED]
         assert names and DEDICATED<=set(listed.splitlines()),'Dedicated tests must be present and partitioned'
@@ -32,8 +36,8 @@ def main():
     elif args.check=='readers':
         run([NATIVE/'readers_test.exe',NATIVE/'frame.bin'])
         run([NATIVE/'binding_test.exe'])
-        run([NATIVE/'live_api_test.exe'])
-        run([test,'-test.v','-test.run','^TestNativeABI$'],dict(os.environ,TELEMETRY_ABI_FRAME=str(NATIVE/'frame.bin')))
+        run([NATIVE/'live_api_test.exe',NATIVE/'badges.bin'])
+        run([test,'-test.v','-test.run','^TestNative(ABI|BadgesABI)$'],dict(os.environ,TELEMETRY_ABI_FRAME=str(NATIVE/'frame.bin'),TELEMETRY_BADGES_FRAME=str(NATIVE/'badges.bin')))
     elif args.check=='publisher':
         run([NATIVE/'runtime_check.exe', ROOT/'bin/telemetry-live.dll'])
         missing=subprocess.run([str(NATIVE/'runtime_check.exe'),str(ROOT/'bin/telemetry-live.dll'),'telemetry-intentionally-missing-runtime.dll'],capture_output=True,text=True)
@@ -43,7 +47,7 @@ def main():
     elif args.check=='helper':run([sys.executable,'tools/checks/lifecycle_check.py'])
     elif args.check=='privacy':
         run([sys.executable,'tools/checks/package_privacy_test.py'])
-        run([sys.executable,'tools/checks/package_check.py','--check','privacy'])
-    else:run([sys.executable,'tools/checks/package_check.py','--check',args.check])
+        run([sys.executable,'tools/checks/package_check.py','--check','privacy','--archive',archive])
+    else:run([sys.executable,'tools/checks/package_check.py','--check',args.check,'--archive',archive])
 
 if __name__=='__main__':main()

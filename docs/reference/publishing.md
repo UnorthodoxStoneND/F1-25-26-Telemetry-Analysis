@@ -22,13 +22,13 @@ python source/package.py
 python tools/checks/package_check.py
 ```
 
-Use the resulting `dist/F1_Telemetry_v<version>.zip` for both GitHub and the browser. Record its SHA-256 after the final package is built. A new version or package has a new hash; older antivirus results do not cover the new archive or rebuilt executable.
+For release versions, build and validate the resulting `dist/F1_Telemetry_v<version>.zip` and its generated `.zip.sha256` checksum for GitHub and the browser. Retain the validated ZIP and matching checksum under `../Releases/<version>/`, alongside a `SHA256SUMS.txt` copy for publication. Existing files in Releases are left in place. Test versions go into `../Testing/` instead, with previous test ZIP/checksum pairs moved into `../Testing/Archive/` after the new package is verified. A new version or package has a new hash; older antivirus results do not cover the new archive or rebuilt executable.
 
 ## GitHub
 
 Create a branch, commit the source and icon, push it and open a PR against main. Wait for all sixteen individually required add-on/Swofty checks, then merge. Create the version tag from the merged main commit and attach the exact final ZIP and its `SHA256SUMS.txt` to the GitHub release. The release notes should identify the tested version and any outstanding validation.
 
-Do not distribute the experimental launcher/team-logo prototype as part of this add-on.
+Team badges in this add-on use the supported Swofty image API. Do not bundle separate experimental launcher builds or extracted game assets.
 
 ## Addon Browser
 

@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"fmt"
 	"slices"
-	"strings"
 )
 
 func textBlock(s string) M { return M{"text": M{"text": s, "tone": "neutral"}} }
@@ -16,9 +15,6 @@ func lapTime(ms uint32, known bool) string {
 }
 func driverName(c Car) string {
 	if c.Known&knownName != 0 && c.Name != "" {
-		if surnameBytes := int((c.Flags >> 16) & 255); surnameBytes > 0 && surnameBytes < len(c.Name) && c.Name[surnameBytes] == ' ' {
-			return strings.ToUpper(c.Name[:surnameBytes]) + c.Name[surnameBytes:]
-		}
 		return c.Name
 	}
 	return fmt.Sprintf("Driver %d", c.Vehicle+1)
@@ -36,16 +32,6 @@ func retirementLabel(c Car) string {
 		}
 	}
 	return ""
-}
-func driverCell(c Car) any {
-	name := driverName(c)
-	if label := retirementLabel(c); label != "" {
-		return M{"text": name + " · " + label, "spans": []M{{"text": name + " · "}, {"text": label, "bold": true}}}
-	}
-	if c.Known&knownPit != 0 && c.Flags&inPitLane != 0 {
-		return M{"text": name + " · PIT", "spans": []M{{"text": name + " · "}, {"text": "PIT", "tone": "warn", "bold": true}}}
-	}
-	return name
 }
 func position(c Car) int {
 	if c.Known&knownPosition != 0 && c.Position > 0 {
@@ -90,7 +76,10 @@ func visibleInto(f Frame, mode string, storage []Car) []Car {
 // setups. Poll every tick as before, but leave Swofty's existing view alone
 // until one of its inputs changes. Fixed storage bounds the retained state.
 type viewState struct {
+	Layout                             sessionLayout
+	SessionBest                        uint32
 	Session                            uint64
+	SessionLabel                       string
 	Player                             int32
 	Status, Diagnostic, Mode, Expanded string
 	Highlight, Active                  bool
@@ -99,13 +88,24 @@ type viewState struct {
 }
 
 func (a *App) viewState() viewState {
-	state := viewState{Session: a.frame.Session, Player: a.frame.Player,
-		Status: a.status, Diagnostic: a.frame.Diagnostic, Mode: a.mode,
+	layout := layoutFor(a.frame)
+	state := viewState{Layout: layout, Session: a.frame.Session, Player: a.frame.Player,
+		SessionLabel: sessionSummary(a.frame),
+		Status:       a.status, Diagnostic: a.frame.Diagnostic, Mode: a.mode,
 		Expanded: a.expanded, Highlight: a.highlight, Active: a.frame.State&active != 0}
+	if layout == layoutQualifying {
+		state.SessionBest = sessionBest(a.frame)
+	}
+	if layout == layoutRace {
+		state.Expanded = ""
+	}
 	var storage [maxCars]Car
 	for n, c := range visibleInto(a.frame, a.mode, storage[:0]) {
-		c.Flags &= (255 << 16) | inPitLane | resultMask
-		c.Known &= knownName | knownPosition | knownGrid | knownTyre | knownLast | knownBest | knownPit | knownResult
+		c.Flags &= inPitLane | resultMask
+		c.Known &= knownName | knownPosition | knownGrid | knownTyre | knownLast | knownBest | knownPit | knownResult | knownLaps | knownGapAhead | knownSectors
+		if !badgeRowReady(c) {
+			c.BadgePNG = ""
+		}
 		if c.Known&knownResult == 0 {
 			c.Flags &^= resultMask
 		}
@@ -131,13 +131,37 @@ func (a *App) viewState() viewState {
 		if c.Known&knownBest == 0 {
 			c.Best = 0
 		}
+		if layout != layoutRace {
+			c.WearKnown = 0
+			c.Wear = [4]float32{}
+			c.Known &^= knownGapAhead | knownSectors
+			c.GapAhead = 0
+			c.BestSectors = [3]uint32{}
+			if c.Known&knownPosition != 0 {
+				c.Known &^= knownGrid
+				c.Grid = 0
+			}
+		} else {
+			c.Known &^= knownLaps
+			c.Laps = 0
+		}
+		if c.Known&knownLaps == 0 {
+			c.Laps = 0
+		}
+		if c.Known&knownGapAhead == 0 || retirementLabel(c) != "" {
+			c.Known &^= knownGapAhead
+			c.GapAhead = 0
+		}
+		if c.Known&knownSectors == 0 {
+			c.BestSectors = [3]uint32{}
+		}
 		c.WearKnown &= 15
 		for wheel := range c.Wear {
 			if c.WearKnown&(1<<wheel) == 0 {
 				c.Wear[wheel] = 0
 			}
 		}
-		if a.expanded == "" || a.expanded != rowID(a.frame, c) {
+		if layout == layoutRace || a.expanded == "" || a.expanded != rowID(a.frame, c) {
 			c.SetupKnown = 0
 		}
 		c.SetupKnown &= (1 << 21) - 1
@@ -161,7 +185,6 @@ type textValue struct {
 }
 type wearValue struct {
 	Text string  `json:"text"`
-	Bar  float64 `json:"bar"`
 	Sort float32 `json:"sort"`
 	Tone string  `json:"tone"`
 }
@@ -228,18 +251,7 @@ func wearCell(value float32, known bool) any {
 	if value >= 75 {
 		tone = "bad"
 	}
-	return wearValue{Text: fmt.Sprintf("%.1f%%", value), Bar: float64(value) / 100, Sort: value, Tone: tone}
-}
-
-var driverColumns = makeColumns()
-
-func columns() []M { return driverColumns }
-func makeColumns() []M {
-	c := []M{{"key": "position", "title": "Pos", "width": 46}, {"key": "driver", "title": "Driver"}, {"key": "tyre", "title": "Tyre", "width": 68}}
-	for _, s := range []string{"FL", "FR", "RL", "RR", "Avg"} {
-		c = append(c, M{"key": s, "title": s})
-	}
-	return append(c, M{"key": "last", "title": "Last lap"}, M{"key": "best", "title": "Best lap"}, M{"key": "setup", "title": "Setup", "width": 64})
+	return wearValue{Text: fmt.Sprintf("%.1f%%", value), Sort: value, Tone: tone}
 }
 
 var setupNames = [21]string{"Front wing", "Rear wing", "Differential · on throttle", "Differential · off throttle", "Front camber", "Rear camber", "Front toe", "Rear toe", "Front suspension", "Rear suspension", "Front anti-roll bar", "Rear anti-roll bar", "Front ride height", "Rear ride height", "Brake pressure", "Front brake bias", "Front-left pressure", "Front-right pressure", "Rear-left pressure", "Rear-right pressure", "Fuel remaining"}
@@ -275,27 +287,20 @@ func setupDetail(c Car) []M {
 	return []M{{"table": M{"id": fmt.Sprintf("setup-values-%d", c.Vehicle), "columns": []M{{"key": "left-setting", "title": "Setting"}, {"key": "left-value", "title": "Value", "width": 90}, {"key": "right-setting", "title": "Setting"}, {"key": "right-value", "title": "Value", "width": 90}}, "rows": rows, "compact": true}}}
 }
 func (a *App) view() M {
+	layout := layoutFor(a.frame)
+	best := sessionBest(a.frame)
 	blocks := []M{}
 	batch := []M{}
 	suffix := ""
 	flush := func() {
 		if len(batch) > 0 {
-			blocks = append(blocks, M{"table": M{"id": "drivers" + suffix, "columns": columns(), "rows": batch, "compact": true}})
+			blocks = append(blocks, M{"table": M{"id": "drivers" + suffix, "columns": columns(layout), "rows": batch, "compact": true}})
 			batch = []M{}
 		}
 	}
 	for _, c := range visible(a.frame, a.mode) {
-		p := "—"
-		if position(c) < 1000 {
-			p = fmt.Sprint(position(c))
-		}
-		open := a.expanded == rowID(a.frame, c)
-		cells := []any{p, driverCell(c), tyreCell(c)}
-		for _, wheel := range []int{2, 3, 0, 1} {
-			cells = append(cells, wearCell(c.Wear[wheel], c.WearKnown&(1<<wheel) != 0))
-		}
-		avg := (c.Wear[0] + c.Wear[1] + c.Wear[2] + c.Wear[3]) / 4
-		cells = append(cells, wearCell(avg, c.WearKnown&15 == 15), lapTime(c.Last, c.Known&knownLast != 0), lapTime(c.Best, c.Known&knownBest != 0), toggleValue{Edit: toggleEdit{Toggle: toggleField{Value: open}}})
+		open := layout != layoutRace && a.expanded == rowID(a.frame, c)
+		cells := driverCells(c, layout, best, open)
 		row := M{"id": rowID(a.frame, c), "cells": cells}
 		if retirementLabel(c) != "" {
 			row["tone"] = "muted"
@@ -303,6 +308,11 @@ func (a *App) view() M {
 				if wear, ok := cell.(wearValue); ok {
 					wear.Tone = "muted"
 					cells[i] = wear
+				}
+				if value, ok := cell.(M); ok {
+					if _, exists := value["tone"]; exists {
+						value["tone"] = "muted"
+					}
 				}
 			}
 		} else if a.highlight && int32(c.Vehicle) == a.frame.Player {
@@ -321,10 +331,14 @@ func (a *App) view() M {
 		if a.frame.State&active != 0 && a.mode != "full" {
 			message = "Waiting to identify your car. Full grid is available in the add-on settings."
 		}
-		blocks = append(blocks, M{"table": M{"id": "drivers", "columns": columns(), "rows": []M{}, "compact": true, "empty": message}})
+		blocks = append(blocks, M{"table": M{"id": "drivers", "columns": columns(layout), "rows": []M{}, "compact": true, "empty": message}})
 	}
 	if a.frame.Diagnostic != "" {
 		blocks = append(blocks, textBlock(a.frame.Diagnostic))
 	}
-	return M{"subtitle": a.status + " · v" + addonVersion, "tick": true, "body": M{"blocks": blocks}}
+	subtitle := a.status
+	if summary := sessionSummary(a.frame); summary != "" {
+		subtitle += " · " + summary
+	}
+	return M{"subtitle": subtitle + " · v" + addonVersion, "tick": true, "body": M{"blocks": blocks}}
 }

@@ -40,10 +40,21 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ## Swofty SDK — MIT
 
-`native/swofty_api.h` is from Swofty Launcher release v1.9.55, commit
-`e69f4d905c404a2615412c1060fdfa2e4b716653`. It is MIT-licensed, copyright
+`native/swofty_api.h` and `native/live_images.h` are from Swofty Launcher release v1.9.76, commit
+`b5ca25d4e722ba76ef5ad4269c324dd42fb4f74c`. It is MIT-licensed, copyright
 2026 Jacob Nardella (Swofty). The complete notice is in `native/SDK-LICENSE.txt`.
-Both the SDK header’s original licence identifier and its complete MIT notice are preserved.
+The SDK headers’ original licence identifiers and complete MIT notice are preserved.
+
+## Swofty generated game type declarations — PolyForm Noncommercial 1.0.0
+
+`native/swofty_game_types.hpp` contains selected, unchanged generated type declarations from
+Swofty Launcher v1.9.76, commit `b5ca25d4e722ba76ef5ad4269c324dd42fb4f74c`.
+These declarations are outside the MIT SDK directory and retain their upstream licence.
+Required Notice: Copyright Swofty Pty Ltd (ACN 665 787 244).
+The complete terms are in `native/SWOFTY-LAYOUTS-LICENSE.txt`.
+No launcher implementation is included. The add-on’s first-party code remains MIT.
+
+Source: https://github.com/Swofty-Developments/SwoftyLauncher/tree/v1.9.76/native/include/swofty/game
 
 ## Microsoft C++ Standard Library — Apache-2.0 WITH LLVM-exception
 

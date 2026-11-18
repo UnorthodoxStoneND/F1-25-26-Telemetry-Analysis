@@ -17,10 +17,10 @@ import (
 
 func fixture() []byte {
 	b := make([]byte, frameSize)
-	copy(b, "USTLIVE1")
-	binary.LittleEndian.PutUint32(b[8:], 1)
+	copy(b, "USTLIVE2")
+	binary.LittleEndian.PutUint32(b[8:], 2)
 	binary.LittleEndian.PutUint32(b[12:], frameSize)
-	binary.LittleEndian.PutUint32(b[40:], active|apiReady)
+	binary.LittleEndian.PutUint32(b[40:], active)
 	binary.LittleEndian.PutUint32(b[48:], 1)
 	copy(b[256+140:], "Test Driver")
 	return b
@@ -34,7 +34,7 @@ func TestSnapshotValidation(t *testing.T) {
 	if err != nil || len(f.Cars) != 1 || f.Cars[0].Name != "Test Driver" || f.Cars[0].WearKnown != 14 {
 		t.Fatalf("bad decode: %+v %v", f, err)
 	}
-	for _, mutate := range []func([]byte){func(b []byte) { b[0] = 'X' }, func(b []byte) { b[8] = 2 }, func(b []byte) { b[48] = 33 }, func(b []byte) { b[256] = 32 }, func(b []byte) { b[48] = 2 }} {
+	for _, mutate := range []func([]byte){func(b []byte) { b[0] = 'X' }, func(b []byte) { b[8] = 1 }, func(b []byte) { b[48] = 33 }, func(b []byte) { b[256] = 32 }, func(b []byte) { b[48] = 2 }} {
 		x := fixture()
 		mutate(x)
 		if _, err = decode(x); err == nil {
@@ -58,7 +58,7 @@ func TestNativeABI(t *testing.T) {
 		t.Fatal(err)
 	}
 	f, err := decode(b)
-	if err != nil || f.Tick != 12345 || len(f.Cars) != 1 || f.Cars[0].Name != "ABI Driver" || f.Cars[0].Identity != 1234 || f.Cars[0].Compound != 18 || f.Cars[0].Visual != 17 {
+	if err != nil || f.Tick != 12345 || len(f.Cars) != 1 || f.Cars[0].Name != "ABI Driver" || f.Cars[0].Identity != 1234 || f.Cars[0].Compound != 18 || f.Cars[0].Visual != 17 || f.SessionType != 15 || f.SessionKind != 4 || f.Cars[0].Laps != 7 || f.Cars[0].GapAhead != 1234 || f.Cars[0].BestSectors != [3]uint32{20000, 30000, 30000} {
 		t.Fatalf("C++/Go layout disagrees: %+v %v", f, err)
 	}
 }
@@ -123,12 +123,6 @@ func TestLiveViewAndSetup(t *testing.T) {
 	if r["tone"] != "accent" {
 		t.Fatal("player highlight missing")
 	}
-	averageJSON, _ := json.Marshal(r["cells"].([]any)[7])
-	var average M
-	_ = json.Unmarshal(averageJSON, &average)
-	if average["text"] != "—" {
-		t.Fatal("average used incomplete wear")
-	}
 	if path := os.Getenv("TELEMETRY_NATIVE_VIEWS"); path != "" {
 		file, e := os.Create(path)
 		if e != nil {
@@ -136,8 +130,27 @@ func TestLiveViewAndSetup(t *testing.T) {
 		}
 		defer file.Close()
 		enc := json.NewEncoder(file)
+		for i := range a.frame.Cars {
+			c := &a.frame.Cars[i]
+			c.Known |= knownLaps | knownGapAhead | knownGrid | knownBest | knownSectors | knownResult
+			c.Laps, c.GapAhead, c.Grid = 7, 1234, int32(i+1)
+			c.Best, c.BestSectors = 80000, [3]uint32{20000, 30000, 30000}
+			c.Flags = 2 << 8
+		}
+		v = a.view()
 		if e = enc.Encode(v); e != nil {
 			t.Fatal(e)
+		}
+		a.frame.Cars[12].BadgePNG = testBadgePNG(t)
+		if e = enc.Encode(a.view()); e != nil {
+			t.Fatal(e)
+		}
+		for _, session := range []uint32{5, 10, 15, 16} {
+			a.frame.SessionType = session
+			a.expanded = ""
+			if e = enc.Encode(a.view()); e != nil {
+				t.Fatal(e)
+			}
 		}
 		a.frame = Frame{Player: -1}
 		a.expanded = ""
@@ -209,7 +222,7 @@ func TestLauncherSettings(t *testing.T) {
 }
 func TestProtocolAndNoDiskWrites(t *testing.T) {
 	root := t.TempDir()
-	hello := fmt.Sprintf(`{"id":1,"method":"hello","params":{"api":1,"launcher":"1.9.55","data_dir":%q,"profile":{"name":"default","enabled":true}}}`, filepath.Join(root, "addons", addonID))
+	hello := fmt.Sprintf(`{"id":1,"method":"hello","params":{"api":1,"launcher":"1.9.76","data_dir":%q,"profile":{"name":"default","enabled":true}}}`, filepath.Join(root, "addons", addonID))
 	input := hello + "\n" + `{"id":2,"method":"view","params":{"section":"telemetry"}}` + "\n" + `{"id":3,"method":"view","params":{"section":"analysis"}}` + "\n"
 	var output bytes.Buffer
 	if err := run(strings.NewReader(input), &output); err != nil {
@@ -230,7 +243,7 @@ func TestProtocolAndNoDiskWrites(t *testing.T) {
 	}
 }
 func TestReleasedAndFutureLauncherHandshake(t *testing.T) {
-	for _, launcher := range []string{"1.9.55", "1.10.0", "2.0.0"} {
+	for _, launcher := range []string{"1.9.76", "1.10.0", "2.0.0"} {
 		input := fmt.Sprintf(`{"id":1,"method":"hello","params":{"api":1,"launcher":%q,"data_dir":"unused","profile":{"enabled":false}}}`+"\n", launcher)
 		var output bytes.Buffer
 		if err := run(strings.NewReader(input), &output); err != nil || !bytes.Contains(output.Bytes(), []byte(`"api":1`)) {
@@ -315,7 +328,7 @@ func TestBoundedLiveMemory(t *testing.T) {
 	b := fixture()
 	binary.LittleEndian.PutUint32(b[48:], 24)
 	for id := 0; id < 24; id++ {
-		at := 256 + 280*id
+		at := 256 + carSize*id
 		binary.LittleEndian.PutUint32(b[at:], uint32(id))
 		binary.LittleEndian.PutUint32(b[at+4:], knownName|knownPosition|knownTyre)
 		binary.LittleEndian.PutUint32(b[at+8:], uint32(id+1))

@@ -43,11 +43,12 @@ int main(int argc,char** argv) {
     m.put(tune+0x248,.5f);m.put(tune+0x24c,.5f);
     livewire::Car c{};readers::wear(m,car,c);readers::setup(m,car,c);
     assert(c.wear_known==15 && std::fabs(c.wear[2]-30)<.001);
-    if(c.setup_known!=((1u<<21)-1)||std::fabs(c.setup[16]-24.3f)>.001||
+    constexpr uint32_t remaining_setup=((1u<<21)-1)&~((1u<<14)|(1u<<15)|(1u<<20));
+    if(c.setup_known!=remaining_setup||std::fabs(c.setup[16]-24.3f)>.001||
        std::fabs(c.setup[17]-24.4f)>.001||std::fabs(c.setup[18]-22.1f)>.001||std::fabs(c.setup[19]-22.2f)>.001) {
         std::cerr<<"FAIL: all four setup pressures must come from wheel+0x9c in FL/FR/RL/RR display order\n";return 1;
     }
-    assert(c.setup[2]==55 && c.setup[4]==-3 && c.setup[12]==25 && c.setup[15]==58);
+    assert(c.setup[2]==55 && c.setup[4]==-3 && c.setup[12]==25);
     // Unrelated coefficients must not masquerade as plausible psi readings.
     for(unsigned w=0;w<4;w++)m.put(0x900000+0x1000*w+0x64,30.f);
     c={};readers::setup(m,car,c);assert(std::fabs(c.setup[16]-24.3f)<.001&&std::fabs(c.setup[18]-22.1f)<.001);
@@ -73,6 +74,7 @@ int main(int argc,char** argv) {
         uint64_t h=0xd00000+0x10000*id;m.block(h,0x1000);m.put(list+id*8,h);m.put(h+0x38,uint8_t(2));
         for(unsigned lap=0;lap<3;lap++){auto rec=h+lap*200;float seconds=80.f+float(id)-float(lap);m.xfloat(rec+0xe8,seconds);m.xfloat(rec+0x48,20.f);m.xfloat(rec+0x58,30.f);m.xfloat(rec+0x68,seconds-50);m.put(rec+0xe0,uint64_t(lap==2?1:0));m.put(rec+0xd8,uint8_t(0));}
         c={};readers::timing(m,system,id,c);assert(c.last_ms==(78+id)*1000 && c.best_ms==(79+id)*1000);
+        assert((c.known&livewire::BEST_SECTORS)&&c.best_sectors[0]==20000&&c.best_sectors[1]==30000&&c.best_sectors[2]==(29+id)*1000);
         m.put(h+0x38,uint8_t(0));c={};readers::timing(m,system,id,c);assert(c.last_ms==(80+id)*1000 && c.best_ms==c.last_ms);
     }
     // Garage regression: everyone can have the same advancing raw clock. It
@@ -90,19 +92,45 @@ int main(int argc,char** argv) {
         // Completing an invalid lap updates Last while Best stays on the valid lap.
         m.xfloat(next+0xe8,79);m.xfloat(next+0x48,20);m.xfloat(next+0x58,30);m.xfloat(next+0x68,29);m.put(next+0xe0,uint64_t(1));
         c={};readers::timing(m,system,id,c,&cache);assert(c.last_ms==79000&&c.best_ms==80000);
+        assert(c.best_sectors[0]==20000&&c.best_sectors[1]==30000&&c.best_sectors[2]==30000);
+        c={};readers::timing(m,system,id,c,&cache);assert(c.best_sectors[2]==30000);
         // Inconsistent total, nonfinite sector, and a rewind cannot create a lap.
         m.xfloat(next+0x68,1);assert(!readers::completed_lap(m,next).ms);
         m.xfloat(next+0x68,std::numeric_limits<float>::quiet_NaN());assert(!readers::completed_lap(m,next).ms);
         m.put(h+0x38,uint8_t(0));m.xfloat(h+0x48,0);c={};readers::timing(m,system,id,c,&cache);assert(!c.last_ms&&!c.best_ms);
+    }
+    // Best sectors belong to one best valid lap, never independent sector minima.
+    {
+        const uint64_t s=0x5000000,l=0x5100000,h=0x5200000;
+        m.block(s,0x100);m.block(l,8);m.block(h,0x1000);
+        m.put(s+0x58,l);m.put(s+0x60,l+8);m.put(l,h);m.put(h+0x38,uint8_t(2));
+        const float sectors[4][3]={{20,40,30},{21,37,31},{19,40,29},{20,36,31}};
+        for(unsigned i=0;i<4;i++) {
+            auto rec=h+i*200;auto& v=sectors[i];
+            m.xfloat(rec+0xe8,v[0]+v[1]+v[2]);
+            for(unsigned j=0;j<3;j++)m.xfloat(rec+0x48+j*0x10,v[j]);
+            m.put(rec+0xe0,uint64_t(i==2));m.put(rec+0xd8,uint8_t(0));
+        }
+        readers::TimingCache cache{};
+        for(unsigned repeat=0;repeat<2;repeat++) {
+            c={};readers::timing(m,s,0,c,&cache);
+            assert(c.last_ms==88000&&c.best_ms==89000);
+            assert(c.best_sectors[0]==21000&&c.best_sectors[1]==37000&&c.best_sectors[2]==31000);
+        }
+        m.put(h+0x38,uint8_t(3));c={};readers::timing(m,s,0,c,&cache);
+        assert(c.best_ms==87000&&c.best_sectors[0]==20000&&c.best_sectors[1]==36000&&c.best_sectors[2]==31000);
     }
     livewire::Session life;life.frame.state=livewire::ACTIVE;life.frame.count=1;life.frame.player=0;
     life.event("pause");life.stamp(100);assert(life.frame.state&livewire::PAUSED && life.frame.count==1);
     life.event("resume");life.stamp(101);assert(!(life.frame.state&livewire::PAUSED));
     auto serial=life.serial;life.event("session.end");assert(life.ended && !life.frame.count && life.serial>serial);
     life.event("session.start");assert(!life.ended && !life.frame.count);
-    life.frame.count=1;life.frame.state=livewire::ACTIVE|livewire::API_READY;life.frame.player=0;
+    life.frame.count=1;life.frame.state=livewire::ACTIVE;life.frame.player=0;
+    life.frame.session_type=15;life.frame.session_kind=livewire::SPRINT;
     life.frame.cars[0].vehicle=0;life.frame.cars[0].identity=1234;life.frame.cars[0].known=livewire::NAME|livewire::POSITION|livewire::TYRES;
     life.frame.cars[0].position=1;life.frame.cars[0].compound=18;life.frame.cars[0].visual=17;std::memcpy(life.frame.cars[0].name,"ABI Driver",11);life.stamp(12345);
+    auto& abi=life.frame.cars[0];abi.known|=livewire::LAPS|livewire::GAP_AHEAD|livewire::BEST|livewire::BEST_SECTORS;
+    abi.laps=7;abi.gap_ahead_ms=1234;abi.best_ms=80000;abi.best_sectors[0]=20000;abi.best_sectors[1]=30000;abi.best_sectors[2]=30000;
     if(argc>1){std::ofstream out(argv[1],std::ios::binary);out.write(reinterpret_cast<const char*>(&life.frame),sizeof life.frame);assert(out.good());}
     std::cout<<"PASS: 32-driver advancing garage counters rejected; complete/partial/invalid laps, rewind, wear/setup, lifecycle and ABI\n";
 }

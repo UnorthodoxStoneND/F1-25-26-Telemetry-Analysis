@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-const addonVersion = "0.5.8"
+const addonVersion = "0.5.9"
 const addonID = "unorthodoxstonendmodding.udp-telemetry"
 
 type M = map[string]any
@@ -96,7 +96,7 @@ func (a *App) refresh() {
 		}
 		return
 	}
-	if f.Session != a.frame.Session {
+	if f.Session != a.frame.Session || layoutFor(f) != layoutFor(a.frame) {
 		a.expanded = ""
 	}
 	a.frame = f
@@ -130,6 +130,9 @@ func (a *App) event(raw json.RawMessage) (string, error) {
 	}
 	s := p.Event.Submit
 	if s.Form != "drivers" && !strings.HasPrefix(s.Form, "drivers-after-") {
+		return "none", nil
+	}
+	if layoutFor(a.frame) == layoutRace {
 		return "none", nil
 	}
 	var open bool
