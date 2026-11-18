@@ -11,23 +11,31 @@
 #include "session.h"
 #include "builds.h"
 #include "direct_live.h"
+#include "session_type.h"
+#include "session_metrics.h"
+#include "badges.h"
 
 namespace {
 const SwoftyApi* api;
 
 const SwoftyMem* memory;
 const SwoftyLive* live;
+const SwoftyCarOps* car_ops;
 HANDLE mapping;
 livewire::Frame* shared;
+HANDLE badge_mapping;
+badgewire::Frame* badge_shared;
+badges::Publisher badge_publisher;
 livewire::Session session;
-uintptr_t table;
 bool direct;
 char binding_error[192]{};
 uint32_t game_stamp=0;
 directlive::Sites sites;
 directlive::Context direct_context;
+sessionmetrics::Sites metric_sites;
 std::atomic<uint64_t> lap_system{0};
 uint64_t next_sample=0;
+uint32_t context_kind=livewire::SESSION_UNKNOWN;
 readers::TimingCache timing_cache[livewire::CARS]{};
 uint64_t car_identity[livewire::CARS]{};
 
@@ -35,6 +43,11 @@ bool copy_memory(uint64_t at,void* out,size_t len) {
     if(!memory || !memory->readable(reinterpret_cast<const void*>(at),len)) return false;
     // Protect against an object/page being freed after the readability check.
     __try { std::memcpy(out,reinterpret_cast<const void*>(at),len); return true; }
+    __except(EXCEPTION_EXECUTE_HANDLER) { return false; }
+}
+bool time_remaining(uint64_t fn,uint64_t rules,float& seconds) {
+    // Verified getter, called on the game's flow thread; never set its clock.
+    __try { seconds=reinterpret_cast<float(*)(void*)>(fn)(reinterpret_cast<void*>(rules));return true; }
     __except(EXCEPTION_EXECUTE_HANDLER) { return false; }
 }
 bool verified_layout() {
@@ -61,20 +74,36 @@ template<class T> const T* core_export(const char* name) {
 void publish() {
     if(!shared) return;
     session.stamp(GetTickCount64());
-    InterlockedIncrement64(&shared->sequence);
+    // Prepare privately while readers can still use the previous complete view.
+    if(badge_shared) badge_publisher.sample(live,session.frame,api?api->log:nullptr);
+    const auto committed=InterlockedIncrement64(&shared->sequence)+1;
+    if(badge_shared) InterlockedExchange64(&badge_shared->sequence,committed-1);
     std::memcpy(shared,&session.frame,offsetof(livewire::Frame,sequence));
     std::memcpy(reinterpret_cast<char*>(shared)+24,reinterpret_cast<const char*>(&session.frame)+24,sizeof(*shared)-24);
-    InterlockedIncrement64(&shared->sequence);
+    if(badge_shared) {
+        const auto& frame=badge_publisher.frame;
+        std::memcpy(badge_shared,&frame,offsetof(badgewire::Frame,sequence));
+        std::memcpy(reinterpret_cast<char*>(badge_shared)+24,reinterpret_cast<const char*>(&frame)+24,sizeof(frame)-24);
+        InterlockedExchange64(&badge_shared->sequence,committed);
+    }
+    // The primary sequence commits the telemetry and optional badges together.
+    InterlockedExchange64(&shared->sequence,committed);
 }
 void on_event(const SwoftyEvent* event,void*) {
     if(!event||!event->name) return;
     session.event(event->name);
     if(!std::strcmp(event->name,"session.start")||session.ended) {
+        context_kind=livewire::SESSION_UNKNOWN;
         lap_system.store(0);
         for(auto& cache:timing_cache) cache={};
         std::memset(car_identity,0,sizeof car_identity);
     }
     publish();
+}
+int on_session_context(void*,SwoftyHookCall* call) {
+    if(call&&session.entered&&!session.ended)
+        context_kind=sessioninfo::kind(api->hooks,call->context);
+    return 0;
 }
 using GetLapFn=void*(void*,uint8_t);
 GetLapFn* original_get;
@@ -94,6 +123,8 @@ void on_frame(double,void*) {
     const auto now=GetTickCount64();
     if(now<next_sample) return;
     next_sample=now+200; // UI refreshes at 1 Hz; bounded 5 Hz native reads suffice.
+    badge_publisher.prepare(live);
+    if(!session.permitted) badge_publisher.prefetch(live);
     if(session.ended) { publish(); return; }
     if(!direct) {
         std::snprintf(session.frame.diagnostic,sizeof session.frame.diagnostic,
@@ -126,13 +157,14 @@ void on_frame(double,void*) {
         std::memset(car_identity,0,sizeof car_identity);
     }
     livewire::Frame next{};auto read=copy_memory;
-    if(direct_context.fill(read,sites,next,live)) {
+    if(direct_context.fill(read,sites,next,live,car_ops)) {
+        next.session_kind=sessioninfo::compatible_kind(next.session_type,context_kind);
+        sessionmetrics::fill(read,metric_sites,direct_context.registry,next,live,time_remaining);
         for(unsigned n=0;n<next.count;n++) {
             auto& c=next.cars[n];auto id=c.vehicle;
             if(car_identity[id]!=c.identity) {timing_cache[id]={};car_identity[id]=c.identity;}
             readers::timing(read,lap_system.load(),id,c,&timing_cache[id]);
         }
-        if(lap_system.load()) next.state|=livewire::TIMING_READY;
         session.frame=next;
     } else if(!(session.frame.state&livewire::ACTIVE)) {
         session.frame=next;
@@ -144,26 +176,28 @@ void on_frame(double,void*) {
 }
 void on_load() {
     live=core_export<SwoftyLive>("SwoftyCoreLive");
+    badge_publisher.prepare(live);
+    car_ops=core_export<SwoftyCarOps>("SwoftyCoreCarOps");
     memory=core_export<SwoftyMem>("SwoftyCoreMem");
     if(!memory || memory->version!=1) memory=nullptr;
     direct=memory && verified_layout();
-    table=direct?resolve_binding("g_Sess_VehicleTable"):0;
-    direct=direct && table;
     if(direct) {
-        sites.table=table;sites.count=resolve_binding("g_Sess_VehicleCount");sites.manager=resolve_binding("g_Game_Manager");
-        sites.results=resolve_binding("k_Live_SessionSystemKey");sites.tyres=resolve_binding("k_Live_TyreSystemKey");
-        sites.mode=resolve_binding("k_Live_GameModeSystemKey");sites.entrants=resolve_binding("k_Live_EntrantsSystemKey");
-        sites.participants=resolve_binding("k_Live_VehicleHelperSystemKey");sites.controllers=resolve_binding("g_Live_ControllerSystem");
-        sites.pit=resolve_binding("k_Live_PitLaneSystemKey");
-        sites.controller_vt=resolve_binding("vt_Sess_ControllerSystem");sites.human_vt=resolve_binding("vt_Sess_HumanController");
-        sites.car_vt=resolve_binding("vt_Car_SystemsContainer");
-        direct=sites.count && sites.car_vt;
+        sites.manager=resolve_binding("g_Game_Manager");
+        sites.results=resolve_binding("k_Live_SessionSystemKey");
+        metric_sites.red_key=api->resolve("k_Live_RedFlagSystemKey");
+        metric_sites.red_vt=api->resolve("vt_Sess_RedFlagSystem");
+        metric_sites.race_vt=api->resolve("vt_Sess_RaceRuleset");
+        metric_sites.remaining=api->resolve("Sess_RaceRuleset_GetTimeRemaining");
     }
     if(!memory) std::snprintf(binding_error,sizeof binding_error,"Swofty's memory-check API is unavailable.");
-    wchar_t name[96]; swprintf_s(name,L"Local\\USTelemetryLive-1-%lu",GetCurrentProcessId());
+    wchar_t name[96]; swprintf_s(name,L"Local\\USTelemetryLive-2-%lu",GetCurrentProcessId());
     mapping=CreateFileMappingW(INVALID_HANDLE_VALUE,nullptr,PAGE_READWRITE,0,sizeof(livewire::Frame),name);
     shared=mapping?static_cast<livewire::Frame*>(MapViewOfFile(mapping,FILE_MAP_WRITE,0,0,sizeof(livewire::Frame))):nullptr;
     if(!shared) {if(mapping) CloseHandle(mapping);mapping=nullptr;api->log("[telemetry] shared snapshot could not be created");return;}
+    swprintf_s(name,L"Local\\USTelemetryBadges-1-%lu",GetCurrentProcessId());
+    badge_mapping=CreateFileMappingW(INVALID_HANDLE_VALUE,nullptr,PAGE_READWRITE,0,sizeof(badgewire::Frame),name);
+    badge_shared=badge_mapping?static_cast<badgewire::Frame*>(MapViewOfFile(badge_mapping,FILE_MAP_WRITE,0,0,sizeof(badgewire::Frame))):nullptr;
+    if(!badge_shared&&badge_mapping) {CloseHandle(badge_mapping);badge_mapping=nullptr;}
 
     // Event tokens belong to this DLL; Swofty removes them when unloading the module.
     uint32_t token=0;
@@ -173,6 +207,12 @@ void on_load() {
     bool events_ok=true;
     for(const char* event:{"session.start","session.end","session.unload","pause","resume"})
         events_ok &= api->events->subscribe(event,on_event,nullptr,&token)==SWOFTY_ASSET_OK;
+    if(api->hooks&&api->hooks->version>=1&&api->hooks->available&&api->hooks->available()&&
+       api->hooks->attach&&api->hooks->context_in) {
+        for(const char* point:{"session.start","flow.state"})
+            if(api->hooks->attach(point,SWOFTY_PHASE_AFTER,0,on_session_context,nullptr,&token)!=SWOFTY_ASSET_OK)
+                api->log("[telemetry] session context hook unavailable: %s",point);
+    }
     events_ok &= api->events->on_frame(on_frame,nullptr,&token)==SWOFTY_ASSET_OK;
     if(!events_ok) std::snprintf(session.frame.diagnostic,sizeof session.frame.diagnostic,"The launcher core could not activate live session callbacks.");
     publish();
@@ -184,6 +224,9 @@ extern "C" __declspec(dllexport) const uint32_t SwoftyAddonApi=SWOFTY_API_VERSIO
 extern "C" __declspec(dllexport) int SwoftyAddonInit(const SwoftyApi* value) {
     if(!value || value->version<SWOFTY_API_VERSION || !value->resolve || !value->register_mixins || !value->module_base) return 0;
     api=value;
+    // Do not wait for on_load/hook settlement: the menus may render badges first.
+    live=core_export<SwoftyLive>("SwoftyCoreLive");
+    badge_publisher.prepare(live);
     memory=core_export<SwoftyMem>("SwoftyCoreMem");
     if(!memory || memory->version!=1) memory=nullptr;
     // Named wrappers never alter arguments/results and are offered only when resolved.
@@ -204,6 +247,8 @@ BOOL WINAPI DllMain(HINSTANCE,DWORD reason,LPVOID) {
         if(shared) {session.clear(true);publish();}
         if(shared) UnmapViewOfFile(shared);
         if(mapping) CloseHandle(mapping);
+        if(badge_shared) UnmapViewOfFile(badge_shared);
+        if(badge_mapping) CloseHandle(badge_mapping);
     }
     return TRUE;
 }

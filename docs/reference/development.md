@@ -14,12 +14,17 @@ go -C source build -buildvcs=false -trimpath -o ../bin/telemetry-live.exe .
 
 The Go helper retains symbols and DWARF debug information; path trimming removes local build paths. The helper uses the console subsystem, hidden by Swofty during normal use. The native DLL uses /MD and the same VC++ v14 x64 runtime family as Swofty. A separate /MT host checks real runtime loading and its missing-dependency diagnostic. Create the installable ZIP with `python source/package.py`. Antivirus results for earlier 0.4.x releases do not cover this executable or DLL.
 
+Test versions such as `0.5.9-test.5` package into `../Testing/` with a matching `.zip.sha256` file. After verifying the new ZIP, the packager moves previous test ZIPs and checksums into `../Testing/Archive/`. Identical rebuilds stay in place; changed rebuilds retain the old copy in Archive. Archive collisions use a separate rebuild folder to preserve both copies. Existing Releases are never rotated. Release versions continue to use `dist/`.
+
+Use `--output dist` for isolated CI output or `--output <temporary-folder>` for reproducibility checks. Overrides outside Testing generate a ZIP and checksum without rotating the local test builds.
+
 ## Local validation
 
 ```powershell
 go -C source vet ./...
 go -C source test -trimpath -count=1 ./...
 python tools/checks/live_policy.py
+python tools/checks/package_test.py
 python native/build.py
 ```
 
@@ -48,4 +53,4 @@ See [CI validation](../../tools/checks/README.md) for the shared-artifact pipeli
 | `CHANGELOG.md` | Version history |
 | `bin/`, `dist/`, `.verify/` | Ignored build, package and verification output |
 
-Keep runtime code live-only: no UDP receiver or fallback, recording, post-session analysis or image generation. Do not commit game files, extracted assets, recordings or local build paths.
+Keep runtime code live-only: no UDP receiver or fallback, recording, post-session analysis or generated telemetry charts. Team badges may be converted to PNG in memory for launcher table cells; do not write badge image files. Do not commit game files, extracted assets, recordings or local build paths.

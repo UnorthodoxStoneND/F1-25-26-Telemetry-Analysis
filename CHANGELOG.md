@@ -1,5 +1,81 @@
 # F1 Telemetry changelog
 
+## 0.5.9 — 18 November 2026
+
+- Add automatic Practice, Qualifying/Sprint Qualifying and Sprint/Race views, with the current session and countdown or lap counter in the subtitle.
+- Show completed laps and expandable setups in timed sessions, plus gap to the current session best in qualifying.
+- Show positions gained/lost, gap to the car ahead, sectors from each driver's best valid lap and wheel/average wear percentages in races. Laps on tyre remain omitted.
+- Add team badges to every view through Swofty's image service, including My Team; request images during loading and publish them with matching telemetry.
+- Move Run/Pit/DNF/DSQ into a dedicated Status column, preserve muted retirement rows and exclude the safety car.
+- Require Swofty 1.9.76; replace covered private readers with Live State/CarOps and remove unused acquisition code. Retain checked readers for remaining setup, wear, lap-history and ruleset fields.
+- Improve test packaging with automatic checksums and archiving. Retain MIT licensing and applicable third-party notices.
+- Promote the behaviour tested in 0.5.9-test.9. The user confirmed normal My Team qualifying loading and reported everything working well after further testing; exhaustive session/build coverage was not enumerated.
+
+## 0.5.9-test.9 — 18 November 2026
+
+- Request team badge images through Swofty during session loading, as soon as Live State exposes verified racers, rather than waiting for the table display gate.
+- Poll pending image work while loading and deduplicate identical team references in each prefetch pass. Keep driver rows gated and publish images only with a matched telemetry snapshot.
+- Add regressions for pending-to-ready prefetch, duplicate team references, non-racing vehicles, unavailable Live State and invalid car counts.
+- In-game testing confirmed normal loading into My Team qualifying; after further testing, the user reported everything appeared to be working well, with no further badge delay reported.
+
+## 0.5.9-test.8 — 18 November 2026
+
+- Fix the launcher rejecting populated practice/qualifying rows: send completed laps as a text cell with a numeric sort key, rather than a bare JSON number.
+- Cover zero and nonzero laps and populated values in all session layouts with a serialized cell-format regression; populate emitted launcher validation fixtures.
+
+## 0.5.9-test.7 — 18 November 2026
+
+- Switch automatically between Practice, Qualifying/Sprint Qualifying and Sprint/Race tables, retaining team badges in every view.
+- Show completed laps and expandable setups in timed sessions; add gap to the current session best in qualifying.
+- Show positions gained/lost, gap ahead, best-lap S1/S2/S3 and compact wheel/average wear percentages in races. Keep sectors from the same best valid lap and omit tyre age.
+- Move Run/Pit/DNF/DSQ into a dedicated Status column and preserve muted retirement rows, nearby-driver mode and synchronized badges.
+- Extend native/API, shared-snapshot and session-view regressions. In-game verification of the new layouts remains required.
+
+## 0.5.9-test.6 — 18 November 2026
+
+- Publish telemetry and badges as one generation, and accept them together in the helper. Reject mixed generations without changing the previously displayed rows.
+- Hold a row’s badge until its name, current position and tyre data are ready, so badges do not appear ahead of the basic telemetry.
+- Keep unavailable images and lap times as blanks/dashes without waiting indefinitely. Session end clears immediately even if the badge buffer is updating.
+- Add Windows shared-memory regressions for both directions of out-of-sync publication, in-progress copies, retained-view integrity and immediate session clearing.
+
+## 0.5.9-test.5 — 18 November 2026
+
+- Package test builds directly into Testing with SHA-256 sidecars and automatic archiving of previous test packages; preserve Releases and isolate CI/reproducibility outputs.
+- Exclude safety cars and other non-racing vehicles using Live State’s verified racer identity flag. Keep retired racers in the table.
+- Start the Live State image capture service at add-on load and retry during startup without waiting for an active session. This addresses late activation that can miss My Team badge textures created in menus.
+- Log badge reference/image availability changes through Swofty’s normal log for follow-up diagnostics.
+- Add regressions for a 24-driver grid plus safety car, non-racers in other slots, unknown identities, retained retirements and capture before Live State becomes available.
+- In-game verification of My Team badge capture remains required.
+
+## 0.5.9-test.4 — 18 November 2026
+
+- Add a team-logo column between position and driver using only Swofty 1.9.76’s Live State badge references and image service.
+- Keep catalogue and runtime My Team badge pixels in a bounded optional shared-memory buffer. Convert to transparent PNG table cells in memory and reuse unchanged images.
+- Leave pending or unavailable badges blank, without blocking telemetry. Clear badges across session and car identity changes; retain existing setup, status and telemetry controls.
+- Add native publisher and native-to-Go image tests, including transparency, image-service availability, stale identities, bounds and cache refreshes. In-game validation remains required.
+
+## 0.5.9-test.3 — 18 November 2026
+
+- Require Swofty 1.9.76 and replace private car discovery, player, session type, position/result, tyre, pit and current-lap readers with Live State and CarOps.
+- Show the launcher’s driver display names and remove the separate full-name reader and formatting metadata.
+- Read fuel, brake pressure and brake bias through CarOps; retain the current conversions and all other setup controls.
+- Use exported game type declarations for the starting-grid fallback and component pointers. Retain checked readers for fields the launcher does not yet expose.
+- Update host regressions to cover API-only acquisition, unavailable/malformed fields, stale handles and current display behaviour. In-game validation of this migration is still required.
+
+## 0.5.9-test.2 — 18 November 2026
+
+- Remove unused internal readiness/player flags and duplicate vehicle-table storage; retain the readers and validation needed by the current display.
+- Move the session label into the existing page subtitle, reclaiming the extra block height above the table. The launcher retains control of scrolling.
+- Add a binding-backed session countdown for timed practice/qualifying/sprint qualifying and a leader-based lap counter for Sprint/Race sessions. Preserve unknown readings when bindings or game objects are unavailable.
+- Session type display was confirmed in-game in test.1. New countdown/lap readings and the compact header await in-game validation.
+
+## 0.5.9-test.1 — 18 November 2026
+
+- Display the current session above the driver table, including practice and qualifying formats, sprint qualifying, Sprint, Race and Time Trial.
+- Use the launcher’s weekend-aware session context to distinguish Sprint from Race, with an explicit unconfirmed label when the necessary context is unavailable.
+- Read the numeric type through Live State with a checked binding fallback; clear labels between sessions and refresh when the classification changes.
+- Local test build; session detection still requires in-game validation.
+
 ## 0.5.8 — 18 November 2026
 
 - Release the add-on’s first-party code under MIT, updating the manifest, source identifiers and package checks while preserving third-party notices. Earlier packages retain their original licence notices.

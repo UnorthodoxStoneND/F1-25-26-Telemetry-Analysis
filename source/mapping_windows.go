@@ -41,9 +41,23 @@ type Reader struct {
 	pid              uint32
 	buffer           [frameSize]byte
 	cars             [maxCars]Car
+	badgeMapping     syscall.Handle
+	badgeAddress     uintptr
+	badgeBuffer      []byte
+	badges           badgeCache
 }
 
 func (r *Reader) Close() {
+	if r.badgeAddress != 0 {
+		unmapView.Call(r.badgeAddress)
+	}
+	if r.badgeMapping != 0 {
+		syscall.CloseHandle(r.badgeMapping)
+	}
+	r.badgeAddress = 0
+	r.badgeMapping = 0
+	r.badgeBuffer = nil
+	r.badges = badgeCache{}
 	if r.address != 0 {
 		unmapView.Call(r.address)
 	}
@@ -73,7 +87,7 @@ func (r *Reader) attach() bool {
 			// SYNCHRONIZE only: never open another process for memory reads or writes.
 			proc, err := syscall.OpenProcess(0x100000, false, e.PID)
 			if err == nil {
-				name, _ := syscall.UTF16PtrFromString(fmt.Sprintf("Local\\USTelemetryLive-1-%d", e.PID))
+				name, _ := syscall.UTF16PtrFromString(fmt.Sprintf("Local\\USTelemetryLive-2-%d", e.PID))
 				m, _, _ := openMapping.Call(4, 0, uintptr(unsafe.Pointer(name)))
 				if m != 0 {
 					address, _, _ := mapView.Call(m, 4, 0, 0, frameSize)
@@ -112,13 +126,80 @@ func (r *Reader) Read() (Frame, error) {
 		if before&1 != 0 {
 			continue
 		}
-		if !copyMapping(r.address, r.buffer[:]) || !copyMapping(r.address+16, sequence[:]) {
+		if !copyMapping(r.address, r.buffer[:]) {
+			break
+		}
+		if binary.LittleEndian.Uint64(r.buffer[16:]) != before {
+			continue
+		}
+		badgeState := badgesUnavailable
+		if binary.LittleEndian.Uint32(r.buffer[40:])&active != 0 {
+			badgeState = r.readBadgeSnapshot(before)
+			if badgeState == badgesUpdating {
+				continue
+			}
+		}
+		if !copyMapping(r.address+16, sequence[:]) {
 			break
 		}
 		after := binary.LittleEndian.Uint64(sequence[:])
 		if before == after && after&1 == 0 && binary.LittleEndian.Uint64(r.buffer[16:]) == after {
-			return decodeInto(r.buffer[:], r.cars[:0])
+			f, err := decodeInto(r.buffer[:], r.cars[:0])
+			if err == nil {
+				if f.State&active == 0 {
+					r.badges = badgeCache{}
+				} else if badgeState == badgesReady {
+					r.badges.apply(r.badgeBuffer, &f)
+				}
+			}
+			return f, err
 		}
 	}
 	return Frame{}, errUpdating
+}
+
+type badgeReadState uint8
+
+const (
+	badgesUnavailable badgeReadState = iota
+	badgesReady
+	badgesUpdating
+)
+
+// Copy the optional badge buffer for the same committed telemetry generation.
+// Pending image requests are represented by blank slots, not by an unfinished commit.
+func (r *Reader) readBadgeSnapshot(expected uint64) badgeReadState {
+	if r.badgeAddress == 0 {
+		name, _ := syscall.UTF16PtrFromString(fmt.Sprintf("Local\\USTelemetryBadges-1-%d", r.pid))
+		m, _, _ := openMapping.Call(4, 0, uintptr(unsafe.Pointer(name)))
+		if m == 0 {
+			return badgesUnavailable
+		}
+		address, _, _ := mapView.Call(m, 4, 0, 0, badgeFrameSize)
+		if address == 0 {
+			syscall.CloseHandle(syscall.Handle(m))
+			return badgesUnavailable
+		}
+		r.badgeMapping = syscall.Handle(m)
+		r.badgeAddress = address
+	}
+	if len(r.badgeBuffer) != badgeFrameSize {
+		r.badgeBuffer = make([]byte, badgeFrameSize)
+	}
+	var sequence [8]byte
+	if !copyMapping(r.badgeAddress+16, sequence[:]) {
+		return badgesUnavailable
+	}
+	before := binary.LittleEndian.Uint64(sequence[:])
+	if before&1 != 0 || before != expected {
+		return badgesUpdating
+	}
+	if !copyMapping(r.badgeAddress, r.badgeBuffer) || !copyMapping(r.badgeAddress+16, sequence[:]) {
+		return badgesUnavailable
+	}
+	after := binary.LittleEndian.Uint64(sequence[:])
+	if before != after || binary.LittleEndian.Uint64(r.badgeBuffer[16:]) != expected {
+		return badgesUpdating
+	}
+	return badgesReady
 }

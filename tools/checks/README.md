@@ -7,12 +7,12 @@ their failure also fails the dependent required checks instead of skipping them.
 
 | Required check | Scope |
 | --- | --- |
-| Unit tests | Remaining Go tests, including live views, tyre pressures, session state and read-only mapping lifecycle |
+| Unit tests | Packaging routing/checksums/archive preservation and remaining Go tests, including live views, tyre pressures, session state and read-only mapping lifecycle |
 | Static analysis | Go vet |
 | Launcher protocol compatibility | Released/future launcher handshake and unsupported API rejection |
 | Live memory bounds | Bounded refresh memory |
-| Live-only acquisition policy | No UDP, recording, analysis or image generation |
-| Native game readers | Reader, binding, Live State fallback and native/Go shared-memory ABI tests |
+| Live-only acquisition policy | No UDP, recording, analysis or image files; memory-only team badges |
+| Native game readers | Reader, binding, Live State/CarOps acquisition and native/Go telemetry/badge shared-memory ABI tests |
 | Native publisher lifecycle | Actual DLL with the mock core on unsupported and both supported game layouts |
 | Helper lifecycle and shutdown | Actual helper protocol, disabled analysis, no data writes and EOF shutdown |
 | Package integrity and versions | ZIP entries, versions, manifest and reproducibility |
@@ -35,7 +35,7 @@ build, while both support roles remain explicitly listed.
 The minimum in swofty_versions.json must match the manifest's launcher minimum.
 Latest stable is resolved once per run, and its immutable commit and release tag
 are recorded in the validation artifact and printed by each compatibility check.
-Only the consumed native ABI is compared: a higher API version or appended
+Only the consumed native ABI and exported game fields are compared: a higher API version or appended
 unused fields need not break compatibility. These checks do not run the actual
 game or copy Swofty's unrelated application, recorder or network test suites.
 

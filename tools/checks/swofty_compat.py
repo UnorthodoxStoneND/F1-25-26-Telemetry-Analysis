@@ -45,6 +45,29 @@ def compare_sdk(baseline,upstream):
     differences={k:(v,upstream.get(k)) for k,v in baseline.items() if k!='api_version' and upstream.get(k)!=v}
     assert not differences,'Consumed native SDK contract changed: '+json.dumps(differences)
 
+def compare_game_types(upstream):
+    """Check the exported fields we read against the release's generated bindings."""
+    local=(ROOT/'native/swofty_game_types.hpp').read_text(encoding='utf-8')
+    groups={
+        'live.hpp': {
+            'GameManagerLive': ('systems_map',),
+            'NeRobinHoodMapU64': ('slots','meta'),
+            'SessionSystem': ('entries_begin','entries_end'),
+            'SessionVehicleEntry': ('vehicle_id','grid_position_a','grid_position_b'),
+        },
+        'car.hpp': {'CarLive': ('f1_tuning','f1_aero','handling_version','suspension')},
+    }
+    def contract(text,kind,field):
+        body=re.search(r'struct '+kind+r' \{(.*?)\n\};',text,re.S).group(1)
+        declaration=re.search(r'^([^\n;]*\b'+field+r'(?:\[[^\]]+\])?);',body,re.M).group(1)
+        offset=re.search(r'offsetof\('+kind+r', '+field+r'\) == (0x[0-9a-f]+|[0-9]+)',text).group(1)
+        return re.sub(r'\s+',' ',declaration.strip()),int(offset,0)
+    for filename,types in groups.items():
+        exported=(upstream/'native/include/swofty/game'/filename).read_text(encoding='utf-8')
+        for kind,fields in types.items():
+            for field in fields:
+                assert contract(local,kind,field)==contract(exported,kind,field),f'Exported game field changed: {kind}.{field}'
+
 def prepare(no_install=False,offline=False):
     config=json.loads((ROOT/'tools/checks/swofty_versions.json').read_text())
     assert config['repository']==REPOSITORY
@@ -70,7 +93,7 @@ def prepare(no_install=False,offline=False):
         sha=item['commit'];assert re.fullmatch('[0-9a-f]{40}',sha)
         target=OUTPUT/label;target.mkdir(exist_ok=True)
         if sha in compiled:
-            for name in ('swofty_api.h','validator.exe','compile-error.txt'):
+            for name in ('swofty_api.h','live_images.h','validator.exe','compile-error.txt'):
                 previous=compiled[sha]/name
                 if previous.exists():shutil.copy2(previous,target/name)
             print(f'{label}: reusing validator for identical commit {sha}',flush=True)
@@ -92,6 +115,7 @@ def prepare(no_install=False,offline=False):
                 destination.parent.mkdir(parents=True,exist_ok=True)
                 destination.write_bytes(z.read(entry))
         shutil.copy2(upstream/'packages/sdk/include/swofty_api.h',target/'swofty_api.h')
+        shutil.copy2(upstream/'packages/sdk/include/swofty/live_images.h',target/'live_images.h')
         example=upstream/'packages/addon-api/examples/telemetry_contract.rs'
         example.parent.mkdir(exist_ok=True)
         shutil.copy2(ROOT/'tools/checks/native_api.rs',example)
@@ -123,8 +147,10 @@ def check(label,kind):
         header=target/'swofty_api.h'
         if label=='minimum':
             assert hashlib.sha256(header.read_bytes()).digest()==hashlib.sha256((ROOT/'native/swofty_api.h').read_bytes()).digest(),'Vendored SDK differs from minimum release'
+            assert (target/'live_images.h').read_bytes()==(ROOT/'native/live_images.h').read_bytes(),'Vendored image SDK differs from minimum release'
         baseline=json.loads((OUTPUT/'sdk-baseline.json').read_text())
         compare_sdk(baseline,sdk_report(header,ROOT/'.verify'/('sdk-'+label)))
+        compare_game_types(ROOT/'.verify/swofty-sources'/versions[label]['commit'])
         print('PASS: consumed native field offsets, widths, callback signatures and constants remain compatible',flush=True)
     else:
         if (target/'compile-error.txt').exists():raise RuntimeError((target/'compile-error.txt').read_text(encoding='utf-8'))

@@ -40,7 +40,7 @@ if not args.build_only:
 subprocess.run(common + [str(root/'native/live_api_test.cpp'), '/Fo'+str(output/'live_api_test.obj'),
                         '/Fe'+str(output/'live_api_test.exe'), '/link', '/Brepro'], env=env, cwd=output, check=True)
 if not args.build_only:
-    subprocess.run([str(output/'live_api_test.exe')], check=True, timeout=30)
+    subprocess.run([str(output/'live_api_test.exe'),str(output/'badges.bin')], check=True, timeout=30)
 if not args.tests_only:
     subprocess.run(common + [str(root/'native/runtime_check.cpp'), '/Fo'+str(output/'runtime_check.obj'),
                             '/Fe'+str(output/'runtime_check.exe'), '/link', '/Brepro', 'version.lib'], env=env, cwd=output, check=True)

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 #include "live_wire.h"
+#include "swofty_game_types.hpp"
 #include <cmath>
 #include <cstring>
 #include <limits>
@@ -34,30 +35,24 @@ constexpr Slider SLIDERS[] = {
     {10,0x250,1,21,20},{11,0x254,1,21,20}
 };
 template<class R> void setup(R& r,uint64_t car,livewire::Car& out,const Slider* sliders=SLIDERS,size_t count=sizeof(SLIDERS)/sizeof(*SLIDERS)) {
-    auto tune=pointer(r,car+0x590);
+    auto tune=pointer(r,car+offsetof(swofty::game::CarLive,f1_tuning));
     if (!tune || pointer(r,tune+8)!=car) return;
     for(size_t n=0;n<count;n++) {
         const auto& s=sliders[n]; float f=0;
         if (read(r,tune+s.offset,f) && range(f,0,1) && s.steps>0)
             setting(out,s.key,s.low+std::round(f*s.steps)/s.steps*(s.high-s.low));
     }
-    auto aero=pointer(r,car+0x570);
+    auto aero=pointer(r,car+offsetof(swofty::game::CarLive,f1_aero));
     for(unsigned n=0;n<2;n++) { uint32_t v=0;
         if(aero && pointer(r,aero+8)==car && read(r,aero+(n?0x19c0:0x19b4),v) && v<=100) setting(out,n,float(v));
     }
     uint32_t handling=0;
-    if (read(r,car+0x9f40,handling)) for(unsigned n=0;n<2;n++) { float f=0;
+    if (read(r,car+offsetof(swofty::game::CarLive,handling_version),handling)) for(unsigned n=0;n<2;n++) { float f=0;
         if(read(r,tune+(handling>=7?0x248:0x240)+4*n,f) && range(f,0,1))
             setting(out,12+n,(n?40.f:15.f)+std::round(f*20));
     }
-    auto brake=pointer(r,car+0x550);
-    if(brake && pointer(r,brake+8)==car) {
-        float f=0;
-        if(read(r,brake+0x21dc,f) && range(f,0,1)) setting(out,14,std::round(f*100));
-        // Bias is a setup fraction, not the displayed front-axle percentage.
-        if(read(r,brake+0x21d8,f) && range(f,0,1)) setting(out,15,50+std::round(f*20));
-    }
-    auto suspension=pointer(r,car+0x580);
+    // Brake values and fuel come exclusively from SwoftyCoreCarOps.
+    auto suspension=pointer(r,car+offsetof(swofty::game::CarLive,suspension));
     if(suspension && pointer(r,suspension+8)==car) for(unsigned n=0;n<4;n++) {
         auto wheel=pointer(r,suspension+0x70+8*n); float pressure=0;
         // Car_Setup_SetTyrePressure stores the configured target at +0x9c.
@@ -68,8 +63,6 @@ template<class R> void setup(R& r,uint64_t car,livewire::Car& out,const Slider* 
             if(psi>=10 && psi<=50) setting(out, n<2?18+n:14+n, float(std::round(psi*10)/10));
         }
     }
-    auto fuel=pointer(r,car+0x540); float kg=0;
-    if(fuel && pointer(r,fuel+8)==car && read(r,fuel+0x100,kg) && range(kg,0,200)) setting(out,20,kg);
 }
 template<class R> bool protected_float(R& r,uint64_t at,float& out) {
     uint32_t value=0,key=0;
@@ -79,8 +72,9 @@ template<class R> bool protected_float(R& r,uint64_t at,float& out) {
 struct CompletedLap {
     uint32_t ms=0;
     bool valid=false;
+    uint32_t sectors[3]{};
 };
-inline bool same(const CompletedLap& a,const CompletedLap& b){return a.ms==b.ms&&a.valid==b.valid;}
+inline bool same(const CompletedLap& a,const CompletedLap& b){return a.ms==b.ms&&a.valid==b.valid&&a.sectors[0]==b.sectors[0]&&a.sectors[1]==b.sectors[1]&&a.sectors[2]==b.sectors[2];}
 // A running counter is positive even in the garage. The game's fastest-lap
 // routine first requires all three sector times: the raw lap clock alone is
 // not evidence that a lap has finished. Apply a sector-total check as well.
@@ -92,13 +86,14 @@ template<class R> CompletedLap completed_lap(R& r,uint64_t record) {
     if(std::fabs(double(sectors[0])+sectors[1]+sectors[2]-seconds)>.010) return {};
     uint64_t bits=0;uint8_t key=0;
     if(!read(r,record+0xe0,bits)||!read(r,record+0xd8,key)||key>1) return {};
-    return {uint32_t(seconds*1000.f),(bits&1)==key};
+    return {uint32_t(seconds*1000.f),(bits&1)==key,{uint32_t(sectors[0]*1000.f),uint32_t(sectors[1]*1000.f),uint32_t(sectors[2]*1000.f)}};
 }
 struct TimingCache {
     uint64_t history=0;
     unsigned index=0;
     CompletedLap tip{};
     uint32_t last=0,best=0,known=0;
+    uint32_t best_sectors[3]{};
 };
 template<class R> void timing(R& r,uint64_t system,unsigned car,livewire::Car& out,TimingCache* cache=nullptr) {
     if(!system || car>=livewire::CARS) return;
@@ -109,19 +104,27 @@ template<class R> void timing(R& r,uint64_t system,unsigned car,livewire::Car& o
     auto tip=completed_lap(r,history+200*current);
     // Changes in an unfinished counter do not invalidate completed timings.
     if(cache&&cache->history==history&&cache->index==current&&same(cache->tip,tip)) {
-        out.last_ms=cache->last;out.best_ms=cache->best;out.known|=cache->known;return;
+        out.last_ms=cache->last;out.best_ms=cache->best;out.known|=cache->known;
+        std::memcpy(out.best_sectors,cache->best_sectors,sizeof out.best_sectors);return;
     }
     uint32_t last=0,best=0;
+    uint32_t best_sectors[3]{};
     for(unsigned lap=0;lap<=current;lap++) {
         auto value=lap==current?tip:completed_lap(r,history+lap*200);
         if(!value.ms) continue;
         last=value.ms;
-        if(value.valid&&(!best||value.ms<best)) best=value.ms;
+        if(value.valid&&(!best||value.ms<best)) {
+            best=value.ms;std::memcpy(best_sectors,value.sectors,sizeof best_sectors);
+        }
     }
     uint8_t after=0;
     if(!read(r,history+0x38,after)||after!=current||pointer(r,list+car*8)!=history||!same(tip,completed_lap(r,history+200*current))) return;
-    uint32_t known=(last?livewire::LAST:0)|(best?livewire::BEST:0);
+    uint32_t known=(last?livewire::LAST:0)|(best?(livewire::BEST|livewire::BEST_SECTORS):0);
     out.last_ms=last;out.best_ms=best;out.known|=known;
-    if(cache) *cache={history,current,tip,last,best,known};
+    std::memcpy(out.best_sectors,best_sectors,sizeof best_sectors);
+    if(cache) {
+        *cache={history,current,tip,last,best,known,{}};
+        std::memcpy(cache->best_sectors,best_sectors,sizeof best_sectors);
+    }
 }
 }

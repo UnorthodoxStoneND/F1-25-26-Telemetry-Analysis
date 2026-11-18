@@ -27,7 +27,7 @@ struct Session {
         else if(!std::strcmp(name,"resume")) paused=false;
     }
     void stamp(uint64_t now) {
-        std::memcpy(frame.magic,"USTLIVE1",8); frame.version=VERSION; frame.size=sizeof(Frame);
+        std::memcpy(frame.magic,"USTLIVE2",8); frame.version=VERSION; frame.size=sizeof(Frame);
         frame.session=serial; frame.tick_ms=now;
         if(paused && (frame.state&ACTIVE)) frame.state|=PAUSED; else frame.state&=~PAUSED;
     }
