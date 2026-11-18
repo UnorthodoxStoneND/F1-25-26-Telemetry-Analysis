@@ -83,8 +83,14 @@ struct Context {
   return readers::read(r,record,vehicle)&&vehicle==id?record:0;
  }
  template<class R> void ranks(R& r,unsigned id,livewire::Car& c)const {
-  if(c.known&livewire::POSITION) return; // Grid is only a fallback ordering key.
+  if((c.known&(livewire::POSITION|livewire::RESULT))==(livewire::POSITION|livewire::RESULT)) return;
   auto record=result(r,id);if(!record) return;
+  uint8_t status=255;
+  if(!(c.known&livewire::RESULT)&&readers::read(r,record+0x18,status)&&status<=7) {
+   c.known|=livewire::RESULT;
+   c.flags=(c.flags&~livewire::RESULT_MASK)|(uint32_t(status)<<livewire::RESULT_SHIFT);
+  }
+  if(c.known&livewire::POSITION) return; // Grid is only a fallback ordering key.
   uint32_t a=0,b=0;
   if(readers::read(r,record+0x48,a)&&readers::read(r,record+0x50,b)&&(a^b)<result_count&&(a^b)<32) {c.position=int32_t((a^b)+1);c.known|=livewire::POSITION;}
   if(readers::read(r,record+0x90,a)&&readers::read(r,record+0x98,b)&&(a^b)<result_count&&(a^b)<32) {c.grid=int32_t((a^b)+1);c.known|=livewire::GRID;}

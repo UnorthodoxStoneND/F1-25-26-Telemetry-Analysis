@@ -1,6 +1,6 @@
 # F1 25/26 Live Telemetry [Swofty Add-On]
 
-Live telemetry and car setups inside Swofty Launcher for F1 25 and the 2026 Season Pack, including My Team. Version **0.5.7** is live-only: no UDP configuration, recording or post-session analysis.
+Live telemetry and car setups inside Swofty Launcher for F1 25 and the 2026 Season Pack, including My Team. Version **0.5.8** is live-only: no UDP configuration, recording or post-session analysis.
 
 ## Features
 
@@ -14,7 +14,7 @@ See the [live-data reference](https://github.com/UnorthodoxStoneND/F1-25-26-Tele
 
 ## Install
 
-Download **`F1_Telemetry_v0.5.7.zip`** from [GitHub Releases](https://github.com/UnorthodoxStoneND/F1-25-26-Telemetry-Analysis/releases). In Swofty, open **Addons** and select **Install addon from computer**. Enable **F1 Live Telemetry** in the active profile and restart Swofty and the game after updating.
+Download **`F1_Telemetry_v0.5.8.zip`** from [GitHub Releases](https://github.com/UnorthodoxStoneND/F1-25-26-Telemetry-Analysis/releases). In Swofty, open **Addons** and select **Install addon from computer**. Enable **F1 Live Telemetry** in the active profile and restart Swofty and the game after updating.
 
 The native DLL uses the same Microsoft Visual C++ v14 x64 runtime family as Swofty Launcher. If a runtime dependency is missing, install or repair [Microsoft's official x64 runtime](https://aka.ms/vc14/vc_redist.x64.exe).
 

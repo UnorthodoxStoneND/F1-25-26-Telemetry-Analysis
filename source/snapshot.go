@@ -24,8 +24,10 @@ const (
 	knownLast     = 16
 	knownBest     = 32
 	knownPit      = 64
+	knownResult   = 128
 )
 const inPitLane = 2
+const resultMask = 7 << 8
 
 type Car struct {
 	Vehicle, Known                    uint32

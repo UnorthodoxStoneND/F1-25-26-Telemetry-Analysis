@@ -30,6 +30,10 @@ struct Snapshot {
  void apply(unsigned id,livewire::Car& out,unsigned count)const {
   if(!valid||id>=32) return;
   const auto& c=cars[id];
+  if((c.have&SWOFTY_LIVE_HAVE_CLASS)&&c.result_status<=7) {
+   out.known|=livewire::RESULT;
+   out.flags=(out.flags&~livewire::RESULT_MASK)|(uint32_t(c.result_status)<<livewire::RESULT_SHIFT);
+  }
   if((c.have&SWOFTY_LIVE_HAVE_CLASS)&&c.position>0&&c.position<=int(count)) {
    out.position=c.position;out.known|=livewire::POSITION;
   }

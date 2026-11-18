@@ -1,5 +1,12 @@
 # F1 Telemetry changelog
 
+## 0.5.8 — 18 November 2026
+
+- Show DNF for did-not-finish and retired cars, and DSQ for disqualified cars, taking priority over PIT.
+- Read result status through the Live State API with a checked native binding fallback.
+- Mute affected rows and wear bars, including the player row; retain tyre colours and setup controls. Whole-row opacity requires launcher support.
+- In-game testing of 0.5.8-test.1 confirmed DNF and DSQ labels, muted rows, and the normal PIT marker for active cars. The 0.5.8 package promotes that tested behaviour without further runtime changes.
+
 ## 0.5.7 — 17 November 2026
 
 - Include the PNG add-on icon and declare Steam as the tested platform for the Swofty Addon Browser.

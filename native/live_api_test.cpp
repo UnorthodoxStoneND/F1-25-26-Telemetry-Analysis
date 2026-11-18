@@ -70,6 +70,18 @@ int main() {
   }
   reset(count);header.player=-1;
   assert(context.fill(read,f.sites,frame,&api)&&frame.player==-1);
+  // Result status is independent of position and takes the checked direct fallback if malformed.
+  for(uint8_t status:{uint8_t(4),uint8_t(5),uint8_t(7)}) {
+   cars[0].result_status=status;
+   assert(context.fill(read,f.sites,frame,&api));
+   assert((frame.cars[0].known&livewire::RESULT)&&((frame.cars[0].flags&livewire::RESULT_MASK)>>8)==status);
+  }
+  cars[0].result_status=255;f.memory.put(f.results[0]+0x18,uint8_t(5));
+  assert(context.fill(read,f.sites,frame,&api));
+  assert((frame.cars[0].known&livewire::RESULT)&&((frame.cars[0].flags&livewire::RESULT_MASK)>>8)==5);
+  assert(frame.cars[0].position==int(count));
+  f.memory.put(f.results[0]+0x18,uint8_t(255));
+  assert(context.fill(read,f.sites,frame,&api)&&!(frame.cars[0].known&livewire::RESULT));
   // Valid snapshots recover on the next sample after an unavailable/mixed frame.
   header.player=0;assert(context.fill(read,f.sites,frame,&api)&&frame.player==0&&frame.cars[0].compound==20);
  }
