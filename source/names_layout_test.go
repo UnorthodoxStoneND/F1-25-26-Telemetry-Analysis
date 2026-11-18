@@ -43,6 +43,49 @@ func TestPitLaneMarkerAndRefresh(t *testing.T) {
 	}
 }
 
+func TestRetirementOverridesPitAndMutesRow(t *testing.T) {
+	for _, tt := range []struct {
+		status uint32
+		label  string
+	}{{4, "DNF"}, {7, "DNF"}, {5, "DSQ"}} {
+		a := App{frame: grid(), mode: "full", highlight: true}
+		c := &a.frame.Cars[0]
+		a.frame.Player = int32(c.Vehicle)
+		c.Name = "Norris Lando"
+		c.Known |= knownPit | knownName | knownResult
+		c.Flags = 6<<16 | inPitLane | 2<<8
+		a.lastView, a.viewSent = a.viewState(), true
+		c.Flags = (c.Flags &^ resultMask) | tt.status<<8
+		if !a.needsView() {
+			t.Fatal("retirement did not refresh the table")
+		}
+		data, err := json.Marshal(driverCell(*c))
+		if err != nil || !bytes.Contains(data, []byte("NORRIS Lando · "+tt.label)) || bytes.Contains(data, []byte("PIT")) {
+			t.Fatalf("wrong retirement label: %s, %v", data, err)
+		}
+		blocks := a.view()["body"].(M)["blocks"].([]M)
+		row := blocks[0]["table"].(M)["rows"].([]M)[0]
+		if row["tone"] != "muted" {
+			t.Fatal("retired player row was not muted")
+		}
+		for _, cell := range row["cells"].([]any) {
+			if wear, ok := cell.(wearValue); ok && wear.Tone != "muted" {
+				t.Fatal("wear stayed bright")
+			}
+		}
+		c.Known &^= knownResult
+		if retirementLabel(*c) != "" {
+			t.Fatal("unknown result fabricated retirement")
+		}
+		c.Known |= knownResult
+		c.Flags = (c.Flags &^ resultMask) | 2<<8
+		data, _ = json.Marshal(driverCell(*c))
+		if !bytes.Contains(data, []byte("PIT")) {
+			t.Fatal("active driver lost PIT marker")
+		}
+	}
+}
+
 func TestSurnameThenGivenName(t *testing.T) {
 	for _, tt := range []struct{ last, first, want string }{
 		{"Norris", "Lando", "NORRIS Lando"},

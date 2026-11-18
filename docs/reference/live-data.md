@@ -3,6 +3,7 @@
 - Driver positions and names in **SURNAME Firstname** order, such as **NORRIS Lando**. Names come from the game's localised driver records, including custom drivers where available; the existing game name is retained when separate fields are unavailable. Choose either the full grid or your car and the nearest four cars. Nearest shows two ahead and two behind, shifting towards the available cars at either end of the grid.
 - Actual tyre compound labels with native coloured circles. Dry tyre colours use the current soft/medium/hard designation; intermediates are green and wets blue.
 - A highlighted **PIT** marker beside a driver's name while that car is in the pit lane. It follows the game's lane-membership reading, including a stationary pit stop; a missing reading does not fabricate a marker.
+- **DNF** (did not finish or retired) and **DSQ** (disqualified) take priority over PIT when a valid game result status is available. These rows use muted text and wear bars, including the player's row; tyre colours and setup switches remain visible. The launcher table API does not expose whole-row opacity.
 - Individual FL, FR, RL and RR wear bars and percentages, plus the average when all four readings are available.
 - Last completed lap and best valid lap for each driver. Unavailable values appear as a dash.
 - A setup control beneath each driver's row showing wings, differentials, camber, toe, suspension, anti-roll bars, ride heights, brakes, all four configured tyre pressures and fuel remaining. Unavailable readings show a dash. Fuel remaining is the current tank value, rather than the original setup fuel load.
@@ -20,4 +21,4 @@ The DLL publishes a fixed **9 KiB shared-memory snapshot** in Windows. The helpe
 
 The helper exits when Swofty closes its communication pipe. Disabling the add-on clears its display and closes the helper's snapshot handles; Swofty may keep the helper process running. A native component already loaded in a running game remains there until that game closes. Restart the game after enabling, disabling or updating a native add-on.
 
-v0.5.7 writes no telemetry files, images or settings of its own. Swofty manages its profile settings and normal launcher logs. Existing data in **Documents/F1 Game Telemetry** is left untouched, but this live-only version does not open or analyse those recordings. Nothing is uploaded by the add-on.
+v0.5.8 writes no telemetry files, images or settings of its own. Swofty manages its profile settings and normal launcher logs. Existing data in **Documents/F1 Game Telemetry** is left untouched, but this live-only version does not open or analyse those recordings. Nothing is uploaded by the add-on.

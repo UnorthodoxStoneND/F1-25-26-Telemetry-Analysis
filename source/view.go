@@ -26,8 +26,22 @@ func driverName(c Car) string {
 func rowID(f Frame, c Car) string {
 	return fmt.Sprintf("car-%d-%d-%d", f.Session, c.Vehicle, c.Identity)
 }
+func retirementLabel(c Car) string {
+	if c.Known&knownResult != 0 {
+		switch (c.Flags & resultMask) >> 8 {
+		case 4, 7:
+			return "DNF"
+		case 5:
+			return "DSQ"
+		}
+	}
+	return ""
+}
 func driverCell(c Car) any {
 	name := driverName(c)
+	if label := retirementLabel(c); label != "" {
+		return M{"text": name + " · " + label, "spans": []M{{"text": name + " · "}, {"text": label, "bold": true}}}
+	}
 	if c.Known&knownPit != 0 && c.Flags&inPitLane != 0 {
 		return M{"text": name + " · PIT", "spans": []M{{"text": name + " · "}, {"text": "PIT", "tone": "warn", "bold": true}}}
 	}
@@ -90,8 +104,11 @@ func (a *App) viewState() viewState {
 		Expanded: a.expanded, Highlight: a.highlight, Active: a.frame.State&active != 0}
 	var storage [maxCars]Car
 	for n, c := range visibleInto(a.frame, a.mode, storage[:0]) {
-		c.Flags &= (255 << 16) | inPitLane
-		c.Known &= knownName | knownPosition | knownGrid | knownTyre | knownLast | knownBest | knownPit
+		c.Flags &= (255 << 16) | inPitLane | resultMask
+		c.Known &= knownName | knownPosition | knownGrid | knownTyre | knownLast | knownBest | knownPit | knownResult
+		if c.Known&knownResult == 0 {
+			c.Flags &^= resultMask
+		}
 		if c.Known&knownPit == 0 {
 			c.Flags &^= inPitLane
 		}
@@ -280,7 +297,15 @@ func (a *App) view() M {
 		avg := (c.Wear[0] + c.Wear[1] + c.Wear[2] + c.Wear[3]) / 4
 		cells = append(cells, wearCell(avg, c.WearKnown&15 == 15), lapTime(c.Last, c.Known&knownLast != 0), lapTime(c.Best, c.Known&knownBest != 0), toggleValue{Edit: toggleEdit{Toggle: toggleField{Value: open}}})
 		row := M{"id": rowID(a.frame, c), "cells": cells}
-		if a.highlight && int32(c.Vehicle) == a.frame.Player {
+		if retirementLabel(c) != "" {
+			row["tone"] = "muted"
+			for i, cell := range cells {
+				if wear, ok := cell.(wearValue); ok {
+					wear.Tone = "muted"
+					cells[i] = wear
+				}
+			}
+		} else if a.highlight && int32(c.Vehicle) == a.frame.Player {
 			row["tone"] = "accent"
 		}
 		batch = append(batch, row)

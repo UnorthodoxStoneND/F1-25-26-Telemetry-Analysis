@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 // Synthetic host-test objects only; never instantiated by the runtime DLL.
 #pragma once
 #include "direct_live.h"

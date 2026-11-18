@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-const addonVersion = "0.5.7"
+const addonVersion = "0.5.8"
 const addonID = "unorthodoxstonendmodding.udp-telemetry"
 
 type M = map[string]any

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include "binding_fixture.h"
 #include "builds.h"
 #include <iostream>
@@ -18,6 +18,11 @@ int main() {
    assert(bool(c.flags&livewire::IN_PIT_LANE)==(id==1));
   }
   // Actual lane membership, not a request to pit or a stationary garage car.
+  for(uint8_t status:{uint8_t(2),uint8_t(4),uint8_t(5),uint8_t(7),uint8_t(255)}) {
+   m.put(fixture.results[1]+0x18,status);assert(context.fill(m,fixture.sites,frame));
+   assert(bool(frame.cars[1].known&livewire::RESULT)==(status<=7));
+   if(status<=7)assert(((frame.cars[1].flags&livewire::RESULT_MASK)>>8)==status);
+  }
   m.put(fixture.pit_records[1]+0x103,uint8_t(0));assert(context.fill(m,fixture.sites,frame));
   assert((frame.cars[1].known&livewire::PIT) && !(frame.cars[1].flags&livewire::IN_PIT_LANE));
   m.put(fixture.pit_records[1]+0x103,uint8_t(1));m.put(fixture.pit_states[1]+4,uint32_t(4));

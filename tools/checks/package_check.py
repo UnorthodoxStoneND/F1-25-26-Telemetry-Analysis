@@ -64,9 +64,14 @@ def main():
             assert manifest['operations']['native']==[{'dll':'bin/telemetry-live.dll'}]
             assert manifest['compat']['launcher']=='>=1.9.55'
             assert manifest['launcher']['program']['windows']=='bin/telemetry-live.exe'
-            assert manifest['license']=='AGPL-3.0-or-later'
-            assert 'GNU AFFERO GENERAL PUBLIC LICENSE' in z.read('LICENSE').decode()
-            assert 'either version 3 of the License' in z.read('LICENSE').decode()
+            assert manifest['license']=='MIT'
+            assert z.read('LICENSE').decode().splitlines()[0]=='MIT License'
+            assert 'Copyright (c) 2026 UnorthodoxStoneNDmodding' in z.read('LICENSE').decode()
+            assert 'Permission is hereby granted, free of charge' in z.read('LICENSE').decode()
+            assert 'THE SOFTWARE IS PROVIDED' in z.read('LICENSE').decode()
+            for name in z.namelist():
+                if name.startswith('native/') and PurePosixPath(name).suffix in {'.cpp','.h'}:
+                    assert 'SPDX-License-Identifier: MIT' in z.read(name).decode(), f'Incorrect source licence: {name}'
             assert b'BSD-3-Clause' in z.read('THIRD_PARTY_NOTICES.md')
             assert b'Apache-2.0 WITH LLVM-exception' in z.read('THIRD_PARTY_NOTICES.md')
             assert b'MIT License' in z.read('native/SDK-LICENSE.txt')

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include "swofty_api.h"
