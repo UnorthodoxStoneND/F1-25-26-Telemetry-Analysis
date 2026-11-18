@@ -68,6 +68,14 @@ def compare_game_types(upstream):
             for field in fields:
                 assert contract(local,kind,field)==contract(exported,kind,field),f'Exported game field changed: {kind}.{field}'
 
+def stage_game_types(upstream,target):
+    """Keep consumed layout headers in the artifact used by isolated check jobs."""
+    folder=Path('native/include/swofty/game')
+    destination=target/folder
+    destination.mkdir(parents=True,exist_ok=True)
+    for filename in ('live.hpp','car.hpp'):
+        shutil.copy2(upstream/folder/filename,destination/filename)
+
 def prepare(no_install=False,offline=False):
     config=json.loads((ROOT/'tools/checks/swofty_versions.json').read_text())
     assert config['repository']==REPOSITORY
@@ -96,6 +104,7 @@ def prepare(no_install=False,offline=False):
             for name in ('swofty_api.h','live_images.h','validator.exe','compile-error.txt'):
                 previous=compiled[sha]/name
                 if previous.exists():shutil.copy2(previous,target/name)
+            stage_game_types(compiled[sha]/'game-types',target/'game-types')
             print(f'{label}: reusing validator for identical commit {sha}',flush=True)
             continue
         archive=OUTPUT/(sha+'.zip')
@@ -116,6 +125,7 @@ def prepare(no_install=False,offline=False):
                 destination.write_bytes(z.read(entry))
         shutil.copy2(upstream/'packages/sdk/include/swofty_api.h',target/'swofty_api.h')
         shutil.copy2(upstream/'packages/sdk/include/swofty/live_images.h',target/'live_images.h')
+        stage_game_types(upstream,target/'game-types')
         example=upstream/'packages/addon-api/examples/telemetry_contract.rs'
         example.parent.mkdir(exist_ok=True)
         shutil.copy2(ROOT/'tools/checks/native_api.rs',example)
@@ -150,7 +160,7 @@ def check(label,kind):
             assert (target/'live_images.h').read_bytes()==(ROOT/'native/live_images.h').read_bytes(),'Vendored image SDK differs from minimum release'
         baseline=json.loads((OUTPUT/'sdk-baseline.json').read_text())
         compare_sdk(baseline,sdk_report(header,ROOT/'.verify'/('sdk-'+label)))
-        compare_game_types(ROOT/'.verify/swofty-sources'/versions[label]['commit'])
+        compare_game_types(target/'game-types')
         print('PASS: consumed native field offsets, widths, callback signatures and constants remain compatible',flush=True)
     else:
         if (target/'compile-error.txt').exists():raise RuntimeError((target/'compile-error.txt').read_text(encoding='utf-8'))

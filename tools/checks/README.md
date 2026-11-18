@@ -32,6 +32,10 @@ is reproducible. Each upstream Rust validator is compiled once and reused by its
 separate manifest and view checks. Identical minimum/latest commits share that
 build, while both support roles remain explicitly listed.
 
+The shared validation artifact includes the two consumed exported game-layout headers
+for each release, alongside its SDK headers and validator. SDK jobs compare those
+artifact copies without depending on the preparation job's source checkout.
+
 The minimum in swofty_versions.json must match the manifest's launcher minimum.
 Latest stable is resolved once per run, and its immutable commit and release tag
 are recorded in the validation artifact and printed by each compatibility check.
