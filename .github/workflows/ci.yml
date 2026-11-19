@@ -41,13 +41,13 @@ jobs:
         run: python native/build.py --build-only
       - name: Build helper and Go test executable once
         run: |
-          go -C source build -buildvcs=false -trimpath -o ../bin/telemetry-live.exe .
+          go -C source build -buildvcs=false -trimpath -ldflags="-compressdwarf=false" -o ../bin/telemetry-live.exe .
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           go -C source test -c -trimpath -o ../.verify/go-tests.exe .
       - name: Build native Linux launcher helper
         run: |
           $env:GOOS = 'linux'
-          go -C source build -buildvcs=false -trimpath -o ../bin/telemetry-live-linux .
+          go -C source build -buildvcs=false -trimpath -buildmode=pie -ldflags="-compressdwarf=false" -o ../bin/telemetry-live-linux .
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Package once for integrity and privacy checks
         run: python source/package.py --output dist

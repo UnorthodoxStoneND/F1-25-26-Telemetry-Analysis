@@ -31,10 +31,31 @@ def inspect(path):
 def main():
     elf=(ROOT/'bin/telemetry-live-linux').read_bytes()
     assert elf[:6]==b'\x7fELF\x02\x01' and struct.unpack_from('<H',elf,18)[0]==62,'Linux helper must be x86-64 ELF'
+    assert struct.unpack_from('<H',elf,16)[0]==3,'Linux helper must be PIE for address randomization'
+    program_table=struct.unpack_from('<Q',elf,32)[0]
+    program_stride,program_count=struct.unpack_from('<HH',elf,54)
+    programs=[struct.unpack_from('<IIQQQQQQ',elf,program_table+i*program_stride) for i in range(program_count)]
+    assert not any(kind==1 and flags&3==3 for kind,flags,*_ in programs),'Linux helper must not have writable executable segments'
+    stacks=[flags for kind,flags,*_ in programs if kind==0x6474e551]
+    assert stacks and all(flags&1==0 for flags in stacks),'Linux helper must have a non-executable stack'
+    section_table=struct.unpack_from('<Q',elf,40)[0]
+    section_stride,section_count,name_index=struct.unpack_from('<HHH',elf,58)
+    names_at,names_size=struct.unpack_from('<QQ',elf,section_table+name_index*section_stride+24)
+    names=elf[names_at:names_at+names_size]
+    debug_sections=set()
+    for i in range(section_count):
+        entry=section_table+i*section_stride
+        name_at=struct.unpack_from('<I',elf,entry)[0]
+        name=names[name_at:names.index(b'\0',name_at)].decode()
+        if name.startswith('.debug_'):
+            assert not struct.unpack_from('<Q',elf,entry+8)[0]&0x800,'Linux debug sections must stay uncompressed'
+            debug_sections.add(name)
+    assert {'.debug_info','.debug_line'}<=debug_sections,'Linux helper must retain DWARF'
     exe=inspect(ROOT/'bin/telemetry-live.exe')
     dll=inspect(ROOT/'bin/telemetry-live.dll')
     assert exe['subsystem']==3,'Helper must retain the tested console subsystem'
-    assert '.symtab' in exe['sections'] and any(s.startswith('.zdebug_') for s in exe['sections']),'Helper symbols/compressed DWARF missing'
+    assert '.symtab' in exe['sections'] and {'.debug_info','.debug_line'}<=set(exe['sections']),'Helper symbols/uncompressed DWARF missing'
+    assert not any(s.startswith('.zdebug_') for s in exe['sections']),'Windows release debug sections must stay uncompressed'
     assert 'vcruntime140.dll' in dll['imports'],'Native DLL must use /MD'
     assert any(s.startswith('api-ms-win-crt-') for s in dll['imports']),'Universal CRT dependency missing'
     assert all(s=='kernel32.dll' or s=='vcruntime140.dll' or s.startswith('api-ms-win-crt-') for s in dll['imports']),dll['imports']
@@ -42,6 +63,6 @@ def main():
     readme=(ROOT/'README.md').read_text()
     assert 'same Microsoft Visual C++ v14 x64 runtime family as Swofty Launcher' in readme and 'https://aka.ms/vc14/vc_redist.x64.exe' in readme
     assert '14.44' not in readme,'Do not impose an add-on-only runtime version cutoff'
-    print('PASS: x64 console helper with symbols/compressed DWARF; /MD native runtime contract; ASLR/NX; documented x64 prerequisite')
+    print('PASS: x64 console helper with symbols/uncompressed DWARF; Linux PIE/non-executable stack/uncompressed DWARF; /MD native runtime contract; ASLR/NX; documented x64 prerequisite')
 
 if __name__=='__main__':main()

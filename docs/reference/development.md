@@ -9,13 +9,15 @@ $env:CGO_ENABLED = "0"
 $env:GOOS = "windows"
 $env:GOARCH = "amd64"
 $env:GOAMD64 = "v1"
-go -C source build -buildvcs=false -trimpath -o ../bin/telemetry-live.exe .
+go -C source build -buildvcs=false -trimpath -ldflags="-compressdwarf=false" -o ../bin/telemetry-live.exe .
 $env:GOOS = "linux"
-go -C source build -buildvcs=false -trimpath -o ../bin/telemetry-live-linux .
+go -C source build -buildvcs=false -trimpath -buildmode=pie -ldflags="-compressdwarf=false" -o ../bin/telemetry-live-linux .
 $env:GOOS = "windows"
 ```
 
-The Go helper retains symbols and DWARF debug information; path trimming removes local build paths. The helper uses the console subsystem, hidden by Swofty during normal use. The native DLL uses /MD and the same VC++ v14 x64 runtime family as Swofty. A separate /MT host checks real runtime loading and its missing-dependency diagnostic. Create the installable ZIP with `python source/package.py`. Antivirus results for earlier 0.4.x releases do not cover this executable or DLL.
+The Go helper retains symbols and DWARF debug information; path trimming removes local build paths. Windows builds retain uncompressed DWARF (`-compressdwarf=false`) so the executable can be inspected without decompressing debug sections. A controlled 0.5.10 comparison retained identical executable code after the Go build ID and cleared the observed Microsoft/Bkav detections; this is not a guarantee for future binaries. The helper uses the console subsystem, hidden by Swofty during normal use. The native DLL uses /MD and the same VC++ v14 x64 runtime family as Swofty. A separate /MT host checks real runtime loading and its missing-dependency diagnostic. Create the installable ZIP with `python source/package.py`. Antivirus results for earlier releases or different builds do not cover a new executable or DLL.
+
+Linux builds also retain uncompressed DWARF and use PIE (`-buildmode=pie`) for address randomization. The tested Linux helper requires the standard x86-64 ELF interpreter `/lib64/ld-linux-x86-64.so.2`, available in the Ubuntu WSL validation environment. This is an experimental Proton/Wine integration, not a claim of compatibility with every Linux distribution. The controlled PIE build cleared the observed Microsoft detection; every new release still needs its own validation.
 
 Test versions such as `0.5.9-test.5` package into `../Testing/` with a matching `.zip.sha256` file. After verifying the new ZIP, the packager moves previous test ZIPs and checksums into `../Testing/Archive/`. Identical rebuilds stay in place; changed rebuilds retain the old copy in Archive. Archive collisions use a separate rebuild folder to preserve both copies. Existing Releases are never rotated. Release versions continue to use `dist/`.
 

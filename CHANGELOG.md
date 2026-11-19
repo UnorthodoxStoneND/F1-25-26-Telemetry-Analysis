@@ -1,5 +1,10 @@
 # F1 Telemetry changelog
 
+## Unreleased
+
+- Keep both helpers' symbols and DWARF debug information uncompressed, and build the Linux helper as PIE for address randomization. These build settings cleared the observed Microsoft/Bkav detections in controlled 0.5.10 helper comparisons without removing telemetry functionality or disabling antivirus protection.
+- Enforce the helper build settings in CI and package validation. The published 0.5.10 archive remains unchanged; a new release must use a new version and receive its own checks and scans.
+
 ## 0.5.10 — 19 November 2026
 
 - Add separate switches for Practice, Qualifying/Sprint Qualifying and Sprint/Race views.
