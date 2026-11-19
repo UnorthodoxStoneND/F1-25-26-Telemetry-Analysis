@@ -15,7 +15,7 @@ The packaging script includes the manifest's icon. The existing package-integrit
 
 ## Build and validate
 
-Follow the [development guide](development.md) to build and test. Keep Go 1.27.4, console subsystem, retained symbols/compressed debug information and the native /MD runtime setting. Then run:
+Follow the [development guide](development.md) to build and test. Keep Go 1.27.4, console subsystem, retained symbols, uncompressed helper debug information, Linux PIE/ASLR and the native /MD runtime setting. Then run:
 
 ```powershell
 python source/package.py
