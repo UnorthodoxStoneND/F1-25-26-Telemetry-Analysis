@@ -75,7 +75,7 @@ func TestRefreshPreservesVisibleChanges(t *testing.T) {
 		"position":   func(a *App) { a.frame.Cars[0].Position = 2; a.frame.Cars[1].Position = 1 },
 		"driver":     func(a *App) { a.frame.Cars[0].Name = "Changed Driver" },
 		"compound":   func(a *App) { a.frame.Cars[0].Compound = 19 },
-		"colour":     func(a *App) { a.frame.Cars[0].Visual = 16 },
+		"tyre-image": func(a *App) { a.frame.Cars[0].TyrePNG = testBadgePNG(t) },
 		"wear":       func(a *App) { a.frame.Cars[0].WearKnown = 15; a.frame.Cars[0].Wear[0] = 12.345 },
 		"last":       func(a *App) { a.frame.Cars[0].Known |= knownLast; a.frame.Cars[0].Last = 80000 },
 		"best":       func(a *App) { a.frame.Cars[0].Known |= knownBest; a.frame.Cars[0].Best = 79000 },
@@ -94,6 +94,9 @@ func TestRefreshPreservesVisibleChanges(t *testing.T) {
 	for name, change := range changes {
 		t.Run(name, func(t *testing.T) {
 			a := App{frame: grid(), mode: "full", status: "Live"}
+			if name == "compound" {
+				a.frame.Cars[0].TyrePNG = testBadgePNG(t)
+			}
 			if name == "wear" {
 				a.frame.SessionType = 15
 			}

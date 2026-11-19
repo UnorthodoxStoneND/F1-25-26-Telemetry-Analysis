@@ -40,8 +40,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ## Swofty SDK — MIT
 
-`native/swofty_api.h` and `native/live_images.h` are from Swofty Launcher release v1.9.76, commit
-`b5ca25d4e722ba76ef5ad4269c324dd42fb4f74c`. It is MIT-licensed, copyright
+`native/swofty_api.h` and `native/live_images.h` are from Swofty Launcher release v1.9.80, commit
+`3088ab289541d277b8ad6ae7b9ae1b88e4440c92`. It is MIT-licensed, copyright
 2026 Jacob Nardella (Swofty). The complete notice is in `native/SDK-LICENSE.txt`.
 The SDK headers’ original licence identifiers and complete MIT notice are preserved.
 

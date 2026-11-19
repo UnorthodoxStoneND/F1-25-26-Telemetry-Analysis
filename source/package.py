@@ -75,7 +75,7 @@ def package(root=ROOT, output=None):
     assert 0 < icon_file.stat().st_size <= 2_000_000, 'Browser icon exceeds 2 MB'
 
     assert re.search(r'const addonVersion = "'+re.escape(version)+r'"', (root/'source/main.go').read_text(encoding='utf-8'))
-    files = [root/name for name in ('swofty.json','README.md','CHANGELOG.md','LICENSE','THIRD_PARTY_NOTICES.md','bin/telemetry-live.exe','bin/telemetry-live.dll','source/go.mod')]
+    files = [root/name for name in ('swofty.json','README.md','CHANGELOG.md','LICENSE','THIRD_PARTY_NOTICES.md','bin/telemetry-live.exe','bin/telemetry-live.dll','bin/telemetry-live-linux','source/go.mod')]
     for folder, extensions in (('source',{'.go','.py'}),('native',{'.h','.hpp','.cpp','.py','.txt'})):
         files += sorted(p for p in (root/folder).iterdir() if p.suffix in extensions and p.is_file())
     files.append(icon_file)
@@ -98,7 +98,7 @@ def package(root=ROOT, output=None):
             for file in sorted(files):
                 info = zipfile.ZipInfo(file.relative_to(root).as_posix(), (1980, 1, 1, 0, 0, 0))
                 info.compress_type = zipfile.ZIP_DEFLATED
-                info.external_attr = 0o100644 << 16
+                info.external_attr = (0o100755 if file.relative_to(root).as_posix()=='bin/telemetry-live-linux' else 0o100644) << 16
                 archive.writestr(info, file.read_bytes())
         with zipfile.ZipFile(staged[0]) as archive:
             assert archive.testzip() is None

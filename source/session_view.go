@@ -49,7 +49,7 @@ func makeColumns(layout sessionLayout) []M {
 	}
 	c = append(c, M{"key": "team", "title": "", "width": 38}, M{"key": "driver", "title": "Driver"}, M{"key": "tyre", "title": "Tyre", "width": 68})
 	if layout == layoutRace {
-		c = append(c, M{"key": "gap", "title": "Gap ahead"}, M{"key": "last", "title": "Last lap"}, M{"key": "best", "title": "Best lap"})
+		c = append(c, M{"key": "stint", "title": "Stint laps", "width": 68}, M{"key": "gap", "title": "Gap ahead"}, M{"key": "last", "title": "Last lap"}, M{"key": "best", "title": "Best lap"})
 		for _, key := range []string{"S1", "S2", "S3", "FL", "FR", "RL", "RR", "Avg"} {
 			title := key
 			if key != "S1" && key != "S2" && key != "S3" {
@@ -145,6 +145,11 @@ func driverCells(c Car, layout sessionLayout, best uint32, open bool) []any {
 	}
 	cells = append(cells, badgeCell(c), driverName(c), tyreCell(c))
 	if layout == layoutRace {
+		var stint any = "—"
+		if c.Known&knownStint != 0 {
+			stint = M{"text": fmt.Sprint(c.StintLaps), "sort": c.StintLaps}
+		}
+		cells = append(cells, stint)
 		known := c.Known&knownGapAhead != 0 && c.GapAhead >= 0 && retirementLabel(c) == ""
 		cells = append(cells, gapCell(uint32(c.GapAhead), known, c.Known&knownPosition != 0 && c.Position == 1),
 			lapTime(c.Last, c.Known&knownLast != 0), lapTime(c.Best, c.Known&knownBest != 0))

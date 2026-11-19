@@ -1,3 +1,5 @@
+//go:build windows
+
 package main
 
 import (
@@ -36,7 +38,7 @@ func TestTelemetryAndBadgesCommitTogether(t *testing.T) {
 	}
 	mainHandle, mainAddress := mapping(frameSize, nil)
 	pid := uint32(os.Getpid()) + 0x70000000
-	name, _ := syscall.UTF16PtrFromString(fmt.Sprintf("Local\\USTelemetryBadges-1-%d", pid))
+	name, _ := syscall.UTF16PtrFromString(fmt.Sprintf("Local\\USTelemetryBadges-2-%d", pid))
 	_, badgeAddress := mapping(badgeFrameSize, name)
 	r := Reader{pid: pid}
 	var err error

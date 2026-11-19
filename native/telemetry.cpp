@@ -14,6 +14,8 @@
 #include "session_type.h"
 #include "session_metrics.h"
 #include "badges.h"
+#include "proton_transport.h"
+#include "stint.h"
 
 namespace {
 const SwoftyApi* api;
@@ -26,6 +28,7 @@ livewire::Frame* shared;
 HANDLE badge_mapping;
 badgewire::Frame* badge_shared;
 badges::Publisher badge_publisher;
+protontransport::Mapping proton_mapping;
 livewire::Session session;
 bool direct;
 char binding_error[192]{};
@@ -38,6 +41,7 @@ uint64_t next_sample=0;
 uint32_t context_kind=livewire::SESSION_UNKNOWN;
 readers::TimingCache timing_cache[livewire::CARS]{};
 uint64_t car_identity[livewire::CARS]{};
+stint::Counter stint_counter;
 
 bool copy_memory(uint64_t at,void* out,size_t len) {
     if(!memory || !memory->readable(reinterpret_cast<const void*>(at),len)) return false;
@@ -76,19 +80,26 @@ void publish() {
     session.stamp(GetTickCount64());
     // Prepare privately while readers can still use the previous complete view.
     if(badge_shared) badge_publisher.sample(live,session.frame,api?api->log:nullptr);
-    const auto committed=InterlockedIncrement64(&shared->sequence)+1;
-    if(badge_shared) InterlockedExchange64(&badge_shared->sequence,committed-1);
-    std::memcpy(shared,&session.frame,offsetof(livewire::Frame,sequence));
-    std::memcpy(reinterpret_cast<char*>(shared)+24,reinterpret_cast<const char*>(&session.frame)+24,sizeof(*shared)-24);
-    if(badge_shared) {
+    auto publish_pair=[&](livewire::Frame* target,badgewire::Frame* image_target) {
+    if(!target) return;
+    const auto committed=InterlockedIncrement64(&target->sequence)+1;
+    if(image_target) InterlockedExchange64(&image_target->sequence,committed-1);
+    std::memcpy(target,&session.frame,offsetof(livewire::Frame,sequence));
+    std::memcpy(reinterpret_cast<char*>(target)+24,reinterpret_cast<const char*>(&session.frame)+24,sizeof(*target)-24);
+    if(image_target) {
         const auto& frame=badge_publisher.frame;
-        std::memcpy(badge_shared,&frame,offsetof(badgewire::Frame,sequence));
-        std::memcpy(reinterpret_cast<char*>(badge_shared)+24,reinterpret_cast<const char*>(&frame)+24,sizeof(frame)-24);
-        InterlockedExchange64(&badge_shared->sequence,committed);
+        std::memcpy(image_target,&frame,offsetof(badgewire::Frame,sequence));
+        std::memcpy(reinterpret_cast<char*>(image_target)+24,reinterpret_cast<const char*>(&frame)+24,sizeof(frame)-24);
+        InterlockedExchange64(&image_target->sequence,committed);
     }
     // The primary sequence commits the telemetry and optional badges together.
-    InterlockedExchange64(&shared->sequence,committed);
+    InterlockedExchange64(&target->sequence,committed);
+    };
+    publish_pair(shared,badge_shared);
+    if(proton_mapping.view) publish_pair(static_cast<livewire::Frame*>(proton_mapping.view),
+        reinterpret_cast<badgewire::Frame*>(static_cast<char*>(proton_mapping.view)+sizeof(livewire::Frame)));
 }
+
 void on_event(const SwoftyEvent* event,void*) {
     if(!event||!event->name) return;
     session.event(event->name);
@@ -96,6 +107,7 @@ void on_event(const SwoftyEvent* event,void*) {
         context_kind=livewire::SESSION_UNKNOWN;
         lap_system.store(0);
         for(auto& cache:timing_cache) cache={};
+        stint_counter.reset();
         std::memset(car_identity,0,sizeof car_identity);
     }
     publish();
@@ -145,6 +157,7 @@ void on_frame(double,void*) {
     if(!session.allow(in_session,blocked)) {
         if(was_permitted) {
             lap_system.store(0);for(auto& cache:timing_cache)cache={};
+            stint_counter.reset();
             std::memset(car_identity,0,sizeof car_identity);
         }
         session.frame.diagnostic[0]=0;
@@ -154,6 +167,7 @@ void on_frame(double,void*) {
     }
     if(!was_permitted) {
         lap_system.store(0);for(auto& cache:timing_cache)cache={};
+        stint_counter.reset();
         std::memset(car_identity,0,sizeof car_identity);
     }
     livewire::Frame next{};auto read=copy_memory;
@@ -164,6 +178,7 @@ void on_frame(double,void*) {
             auto& c=next.cars[n];auto id=c.vehicle;
             if(car_identity[id]!=c.identity) {timing_cache[id]={};car_identity[id]=c.identity;}
             readers::timing(read,lap_system.load(),id,c,&timing_cache[id]);
+            stint_counter.apply(c);
         }
         session.frame=next;
     } else if(!(session.frame.state&livewire::ACTIVE)) {
@@ -190,11 +205,17 @@ void on_load() {
         metric_sites.remaining=api->resolve("Sess_RaceRuleset_GetTimeRemaining");
     }
     if(!memory) std::snprintf(binding_error,sizeof binding_error,"Swofty's memory-check API is unavailable.");
+    if(protontransport::under_wine()) {
+        if(!protontransport::create_for_module(proton_mapping,reinterpret_cast<const void*>(&on_load))) {
+            api->log("[telemetry] Proton shared IPC mapping could not be created");
+        }
+        if(proton_mapping.view) api->log("[telemetry] Proton temporary shared IPC transport ready");
+    }
     wchar_t name[96]; swprintf_s(name,L"Local\\USTelemetryLive-2-%lu",GetCurrentProcessId());
     mapping=CreateFileMappingW(INVALID_HANDLE_VALUE,nullptr,PAGE_READWRITE,0,sizeof(livewire::Frame),name);
     shared=mapping?static_cast<livewire::Frame*>(MapViewOfFile(mapping,FILE_MAP_WRITE,0,0,sizeof(livewire::Frame))):nullptr;
     if(!shared) {if(mapping) CloseHandle(mapping);mapping=nullptr;api->log("[telemetry] shared snapshot could not be created");return;}
-    swprintf_s(name,L"Local\\USTelemetryBadges-1-%lu",GetCurrentProcessId());
+    swprintf_s(name,L"Local\\USTelemetryBadges-2-%lu",GetCurrentProcessId());
     badge_mapping=CreateFileMappingW(INVALID_HANDLE_VALUE,nullptr,PAGE_READWRITE,0,sizeof(badgewire::Frame),name);
     badge_shared=badge_mapping?static_cast<badgewire::Frame*>(MapViewOfFile(badge_mapping,FILE_MAP_WRITE,0,0,sizeof(badgewire::Frame))):nullptr;
     if(!badge_shared&&badge_mapping) {CloseHandle(badge_mapping);badge_mapping=nullptr;}

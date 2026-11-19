@@ -62,7 +62,7 @@ func cellText(t *testing.T, v any) string {
 func TestSessionSpecificColumnsAndBadges(t *testing.T) {
 	practice := []string{"position", "team", "driver", "tyre", "laps", "last", "best", "status", "setup"}
 	qualifying := []string{"position", "team", "driver", "tyre", "laps", "gap", "last", "best", "status", "setup"}
-	racing := []string{"position", "gain", "team", "driver", "tyre", "gap", "last", "best", "S1", "S2", "S3", "FL", "FR", "RL", "RR", "Avg", "status"}
+	racing := []string{"position", "gain", "team", "driver", "tyre", "stint", "gap", "last", "best", "S1", "S2", "S3", "FL", "FR", "RL", "RR", "Avg", "status"}
 	for id := uint32(1); id <= 18; id++ {
 		a := App{frame: grid(), mode: "full"}
 		a.frame.SessionType = id

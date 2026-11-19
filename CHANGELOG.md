@@ -1,5 +1,33 @@
 # F1 Telemetry changelog
 
+## 0.5.10-test.4 — 19 November 2026
+
+- Add calculated Stint laps after Tyre in Sprint/Race views, with normal per-profile column visibility and numeric sorting.
+- Track completed laps from session start inside the native component, independent of the open page. Reset on observed compound changes or four-wheel pit-stop wear resets, including same-compound fresh sets; ignore pit visits without a change and avoid repeated resets in one stop.
+- Keep only bounded per-car observations in memory. Clear state across sessions, reject invalid counts and preserve unknown values after ambiguous rewinds or identity replacement. No recorder or new telemetry files.
+- Add native counter and real DLL integration tests, Windows/Linux snapshot checks, and UI/persistence regressions. In-game stint-count validation remains required.
+
+## 0.5.10-test.3 — 19 November 2026
+
+- Require Swofty 1.9.80 and replace the custom tyre compound/circle indicator with the fitted tyre image exposed by Live State v5 and the image service in every session view.
+- Publish team badges, tyre icons and telemetry coherently. Cache up to 64 image references/revisions, clear stale or unavailable icons, and request them during loading without extracting game assets.
+- Add a native Linux x86-64 helper, fixing the manifest's missing-helper error. Use a temporary delete-on-close shared IPC mapping under Wine/Proton while retaining Windows named mappings; no Linux game-memory reader or network listener is added.
+- Add Ubuntu helper/transport CI, native IPC cleanup checks and Linux/Windows image regressions. Linux helper/transport tests pass in Ubuntu WSL; full in-game Linux/Proton and tyre-icon validation remain required.
+
+## 0.5.10-test.2 — 19 November 2026
+
+- Expand the Columns selector above the table instead of replacing telemetry; keep the table and session counters live while selecting fields.
+- Preview and save changes immediately. Click Columns again to collapse the panel; keep Reset defaults within the expanded panel.
+- Preserve open setup details when opening the selector, and retain recovery when all columns are hidden. Add regressions for inline preview, live refresh, collapse and persistence across session groups.
+- In-game validation remains required.
+
+## 0.5.10-test.1 — 18 November 2026
+
+- Add separate enabled-by-default settings switches for Practice, Qualifying/Sprint Qualifying and Sprint/Race views; disabled groups show a message.
+- Add a Columns header action and temporary selector with per-profile, per-session-group saved visibility for every column and the timer/lap counter. Preserve column order and numeric sorting; hiding Setup also closes its detail card.
+- Save UI preferences only, with atomic replacement and explicit save errors. Keep defaults on missing/invalid files and reject stale selector events after a session/profile change.
+- Add all-hidden recovery and Reset defaults. In-game validation remains required.
+
 ## 0.5.9 — 18 November 2026
 
 - Add automatic Practice, Qualifying/Sprint Qualifying and Sprint/Race views, with the current session and countdown or lap counter in the subtitle.

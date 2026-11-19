@@ -36,6 +36,8 @@ def main():
     elif args.check=='readers':
         run([NATIVE/'readers_test.exe',NATIVE/'frame.bin'])
         run([NATIVE/'binding_test.exe'])
+        run([NATIVE/'stint_test.exe'])
+        run([NATIVE/'proton_transport_test.exe'])
         run([NATIVE/'live_api_test.exe',NATIVE/'badges.bin'])
         run([test,'-test.v','-test.run','^TestNative(ABI|BadgesABI)$'],dict(os.environ,TELEMETRY_ABI_FRAME=str(NATIVE/'frame.bin'),TELEMETRY_BADGES_FRAME=str(NATIVE/'badges.bin')))
     elif args.check=='publisher':

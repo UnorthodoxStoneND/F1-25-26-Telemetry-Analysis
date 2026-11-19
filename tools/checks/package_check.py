@@ -51,6 +51,37 @@ def privacy_pe_debug(raw):
         return bytes(scanned)
     except (ValueError,struct.error,zlib.error):
         return raw
+def privacy_elf_debug(raw):
+    """Decode ELF64 compressed DWARF from the native Linux Go helper."""
+    try:
+        if raw[:6]!=b'\x7fELF\x02\x01':return raw
+        table=struct.unpack_from('<Q',raw,40)[0]
+        stride,count,names=struct.unpack_from('<HHH',raw,58)
+        if stride<64 or count>128 or names>=count:return raw
+        names_at,names_size=struct.unpack_from('<QQ',raw,table+names*stride+24)
+        labels=raw[names_at:names_at+names_size]
+        scanned=bytearray(raw);decoded=[]
+        for index in range(count):
+            entry=table+index*stride
+            label=struct.unpack_from('<I',raw,entry)[0]
+            name=labels[label:labels.index(b'\0',label)]
+            flags=struct.unpack_from('<Q',raw,entry+8)[0]
+            offset,size=struct.unpack_from('<QQ',raw,entry+24)
+            if not name.startswith(b'.debug_') or not flags&0x800:continue
+            if size<24 or offset+size>len(raw):continue
+            kind,_,expected,_=struct.unpack_from('<IIQQ',raw,offset)
+            if kind!=1 or expected>64*1024*1024:continue
+            compressed=raw[offset+24:offset+size]
+            stream=zlib.decompressobj();text=stream.decompress(compressed,expected+1)
+            if not stream.eof or len(text)!=expected:continue
+            consumed=len(compressed)-len(stream.unused_data)
+            scanned[offset+24:offset+24+consumed]=b'\0'*consumed
+            decoded.append(text)
+        for text in decoded:
+            scanned.extend(b'\0'*(2-len(scanned)%2));scanned.extend(text)
+        return bytes(scanned)
+    except (ValueError,IndexError,struct.error,zlib.error):return raw
+
 def privacy_scan_bytes(raw):
     """Ignore only the public Trufo CA contact in PNG provenance certificate DNs.
 
@@ -58,6 +89,7 @@ def privacy_scan_bytes(raw):
     All other certificate fields, image chunks and ordinary files remain scanned.
     """
     if raw.startswith(b'MZ'):return privacy_pe_debug(raw)
+    if raw.startswith(b'\x7fELF'):return privacy_elf_debug(raw)
     if not raw.startswith(b'\x89PNG\r\n\x1a\n'):
         return raw
     contact='@'.join(('ca','trufo.ai')).encode('ascii')
@@ -106,8 +138,10 @@ def main():
             assert archive.name in (ROOT/'README.md').read_text(encoding='utf-8')
             assert manifest['launcher']['sections']==[{'id':'telemetry','title':'Live Telemetry','icon':'activity'}]
             assert manifest['operations']['native']==[{'dll':'bin/telemetry-live.dll'}]
-            assert manifest['compat']['launcher']=='>=1.9.76'
+            assert manifest['compat']['launcher']=='>=1.9.80'
             assert manifest['launcher']['program']['windows']=='bin/telemetry-live.exe'
+            assert manifest['launcher']['program']['linux']=='bin/telemetry-live-linux'
+            assert z.getinfo('bin/telemetry-live-linux').external_attr>>16&0o111
             assert manifest['license']=='MIT'
             assert z.read('LICENSE').decode().splitlines()[0]=='MIT License'
             assert 'Copyright (c) 2026 UnorthodoxStoneNDmodding' in z.read('LICENSE').decode()
@@ -122,7 +156,7 @@ def main():
             assert b'BSD-3-Clause' in z.read('THIRD_PARTY_NOTICES.md')
             assert b'Apache-2.0 WITH LLVM-exception' in z.read('THIRD_PARTY_NOTICES.md')
             assert b'MIT License' in z.read('native/SDK-LICENSE.txt')
-            expected={'swofty.json','README.md','CHANGELOG.md','LICENSE','THIRD_PARTY_NOTICES.md','source/go.mod','bin/telemetry-live.exe','bin/telemetry-live.dll','native/SDK-LICENSE.txt','native/swofty_api.h'}
+            expected={'swofty.json','README.md','CHANGELOG.md','LICENSE','THIRD_PARTY_NOTICES.md','source/go.mod','bin/telemetry-live.exe','bin/telemetry-live.dll','bin/telemetry-live-linux','native/SDK-LICENSE.txt','native/swofty_api.h'}
             assert manifest['icon'] == 'icon.png'
             assert manifest['compat']['platforms'] == ['steam']
             assert manifest['description'].strip() and manifest['category'] == 'utility'
@@ -143,7 +177,7 @@ def main():
         if args.check in ('all','privacy'):
             for name in z.namelist():privacy(name,z.read(name))
             for file in sources():privacy(file.name,file.read_bytes())
-            print('PASS: no personal emails/paths; PE debug data scanned after decompression; public PNG CA contact limited to certificate DN fields')
+            print('PASS: no personal emails/paths; PE/ELF debug data scanned after decompression; public PNG CA contact limited to certificate DN fields')
     if args.check in ('all','integrity'):
         with tempfile.TemporaryDirectory() as temp:
             subprocess.run([sys.executable,str(ROOT/'source/package.py'),'--output',temp],check=True)

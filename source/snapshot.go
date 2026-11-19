@@ -29,6 +29,7 @@ const (
 	knownLaps     = 256
 	knownGapAhead = 512
 	knownSectors  = 1024
+	knownStint    = 2048
 )
 const inPitLane = 2
 const resultMask = 7 << 8
@@ -41,9 +42,11 @@ type Car struct {
 	Setup                             [21]float32
 	Name                              string
 	BadgePNG                          string
+	TyrePNG                           string
 	Flags                             uint32
 	Identity                          uint64
 	Laps                              uint32
+	StintLaps                         uint32
 	GapAhead                          int32
 	BestSectors                       [3]uint32
 }
@@ -94,6 +97,10 @@ func decodeInto(b []byte, storage []Car) (Frame, error) {
 			return Frame{}, fmt.Errorf("invalid vehicle identity")
 		}
 		seen |= 1 << c.Vehicle
+		c.StintLaps = u(at + 300)
+		if c.StintLaps >= 1000 {
+			c.Known &^= knownStint
+		}
 		c.Laps = u(at + 280)
 		c.GapAhead = int32(u(at + 284))
 		for i := range c.BestSectors {

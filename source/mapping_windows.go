@@ -47,6 +47,8 @@ type Reader struct {
 	badges           badgeCache
 }
 
+func (r *Reader) setAddonDir(_ string) {}
+
 func (r *Reader) Close() {
 	if r.badgeAddress != 0 {
 		unmapView.Call(r.badgeAddress)
@@ -170,7 +172,7 @@ const (
 // Pending image requests are represented by blank slots, not by an unfinished commit.
 func (r *Reader) readBadgeSnapshot(expected uint64) badgeReadState {
 	if r.badgeAddress == 0 {
-		name, _ := syscall.UTF16PtrFromString(fmt.Sprintf("Local\\USTelemetryBadges-1-%d", r.pid))
+		name, _ := syscall.UTF16PtrFromString(fmt.Sprintf("Local\\USTelemetryBadges-2-%d", r.pid))
 		m, _, _ := openMapping.Call(4, 0, uintptr(unsafe.Pointer(name)))
 		if m == 0 {
 			return badgesUnavailable

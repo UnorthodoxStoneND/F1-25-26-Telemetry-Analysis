@@ -10,6 +10,9 @@ $env:GOOS = "windows"
 $env:GOARCH = "amd64"
 $env:GOAMD64 = "v1"
 go -C source build -buildvcs=false -trimpath -o ../bin/telemetry-live.exe .
+$env:GOOS = "linux"
+go -C source build -buildvcs=false -trimpath -o ../bin/telemetry-live-linux .
+$env:GOOS = "windows"
 ```
 
 The Go helper retains symbols and DWARF debug information; path trimming removes local build paths. The helper uses the console subsystem, hidden by Swofty during normal use. The native DLL uses /MD and the same VC++ v14 x64 runtime family as Swofty. A separate /MT host checks real runtime loading and its missing-dependency diagnostic. Create the installable ZIP with `python source/package.py`. Antivirus results for earlier 0.4.x releases do not cover this executable or DLL.
@@ -54,3 +57,7 @@ See [CI validation](../../tools/checks/README.md) for the shared-artifact pipeli
 | `bin/`, `dist/`, `.verify/` | Ignored build, package and verification output |
 
 Keep runtime code live-only: no UDP receiver or fallback, recording, post-session analysis or generated telemetry charts. Team badges may be converted to PNG in memory for launcher table cells; do not write badge image files. Do not commit game files, extracted assets, recordings or local build paths.
+
+## Linux helper validation
+
+CI runs portable Go tests and Linux-specific IPC/host-call tests on Ubuntu. From Linux, use `go -C source test -trimpath -count=1 ./...` and `go -C source vet ./...`. From Windows, `GOOS=linux` can cross-build the helper/test executable; run the test binary in an existing Linux/WSL environment. Native Wine/Proton IPC backing and cleanup are also checked by `native/proton_transport_test.cpp`. An in-game Proton test is still required before claiming full Linux support.

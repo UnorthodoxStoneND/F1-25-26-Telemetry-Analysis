@@ -33,6 +33,10 @@ subprocess.run(common + [str(root/'native/readers_test.cpp'), '/Fo'+str(output/'
                         '/Fe'+str(output/'readers_test.exe'), '/link', '/Brepro'], env=env, cwd=output, check=True)
 if not args.build_only:
     subprocess.run([str(output/'readers_test.exe'), str(output/'frame.bin')], check=True, timeout=30)
+subprocess.run(common + [str(root/'native/stint_test.cpp'), '/Fo'+str(output/'stint_test.obj'),
+                        '/Fe'+str(output/'stint_test.exe'), '/link', '/Brepro'], env=env, cwd=output, check=True)
+if not args.build_only:
+    subprocess.run([str(output/'stint_test.exe')], check=True, timeout=30)
 subprocess.run(common + [str(root/'native/binding_test.cpp'), '/Fo'+str(output/'binding_test.obj'),
                         '/Fe'+str(output/'binding_test.exe'), '/link', '/Brepro'], env=env, cwd=output, check=True)
 if not args.build_only:
@@ -41,6 +45,10 @@ subprocess.run(common + [str(root/'native/live_api_test.cpp'), '/Fo'+str(output/
                         '/Fe'+str(output/'live_api_test.exe'), '/link', '/Brepro'], env=env, cwd=output, check=True)
 if not args.build_only:
     subprocess.run([str(output/'live_api_test.exe'),str(output/'badges.bin')], check=True, timeout=30)
+subprocess.run(common + [str(root/'native/proton_transport_test.cpp'), '/Fo'+str(output/'proton_transport_test.obj'),
+                        '/Fe'+str(output/'proton_transport_test.exe'), '/link', '/Brepro'], env=env, cwd=output, check=True)
+if not args.build_only:
+    subprocess.run([str(output/'proton_transport_test.exe')], check=True, timeout=30)
 if not args.tests_only:
     subprocess.run(common + [str(root/'native/runtime_check.cpp'), '/Fo'+str(output/'runtime_check.obj'),
                             '/Fe'+str(output/'runtime_check.exe'), '/link', '/Brepro', 'version.lib'], env=env, cwd=output, check=True)
