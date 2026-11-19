@@ -88,7 +88,7 @@ int main(int argc,char** argv){
     assert(GetProcAddress(core,"SwoftyCoreLive")&&GetProcAddress(core,"SwoftyCoreCarOps"));
     if(verified) {
         fixture=std::make_unique<BindingFixture>(24);
-        fixture->live.version=4;fixture->live.team_badge_texture=badge_reference;fixture->live.images=image_service;
+        fixture->live.version=5;fixture->live.tyre_icon_texture=badge_reference;fixture->live.team_badge_texture=badge_reference;fixture->live.images=image_service;
         fixture->live_enabled=false; // Runtime capture must start before Live State becomes available.
         reinterpret_cast<void(*)(const SwoftyLive*)>(GetProcAddress(core,"TelemetryTestSetLive"))(&fixture->live);
         reinterpret_cast<void(*)(const SwoftyCarOps*)>(GetProcAddress(core,"TelemetryTestSetCarOps"))(&fixture->ops);
@@ -114,7 +114,7 @@ int main(int argc,char** argv){
     wchar_t name[96];swprintf_s(name,L"Local\\USTelemetryLive-2-%lu",GetCurrentProcessId());
     auto handle=OpenFileMappingW(FILE_MAP_READ,FALSE,name);assert(handle);
     auto view=static_cast<const livewire::Frame*>(MapViewOfFile(handle,FILE_MAP_READ,0,0,sizeof(livewire::Frame)));assert(view);
-    swprintf_s(name,L"Local\\USTelemetryBadges-1-%lu",GetCurrentProcessId());
+    swprintf_s(name,L"Local\\USTelemetryBadges-2-%lu",GetCurrentProcessId());
     auto badge_handle=OpenFileMappingW(FILE_MAP_READ,FALSE,name);assert(badge_handle);
     auto badge_view=static_cast<const badgewire::Frame*>(MapViewOfFile(badge_handle,FILE_MAP_READ,0,0,sizeof(badgewire::Frame)));assert(badge_view);
     assert(badge_view->size==sizeof(badgewire::Frame)&&!badge_view->cars[0].width);
@@ -130,14 +130,28 @@ int main(int argc,char** argv){
     assert(badge_view->session==view->session&&badge_view->sequence==view->sequence&&!(badge_view->sequence&1));
     assert(badge_view->cars[0].identity==view->cars[0].identity&&badge_view->cars[0].width==2&&badge_view->cars[0].rgba[3]==64);
     fixture->live.version=3;Sleep(210);frame(.2,nullptr);assert(view->count==24&&!badge_view->cars[0].width);
-    fixture->live.version=4;Sleep(210);frame(.2,nullptr);assert(view->count==24&&badge_view->cars[0].width==2);
+    fixture->live.version=5;Sleep(210);frame(.2,nullptr);assert(view->count==24&&badge_view->cars[0].width==2&&badge_view->tyres[0].width==2);
     // Same numeric ID, distinct weekend-aware Sprint/Race context.
     fixture->header.type=15;current_kind=livewire::SPRINT;
     emit_context("flow.state");Sleep(210);frame(.2,nullptr);
     assert(view->session_type==15&&view->session_kind==livewire::SPRINT);
+    assert((view->cars[0].known&livewire::STINT)&&view->cars[0].stint_laps==3);
+    fixture->live_cars[0].lap=7;fixture->live_cars[0].pit_status=1;
+    Sleep(210);frame(.2,nullptr);assert(view->cars[0].stint_laps==7);
+    uint64_t dynamics=0;assert(fixture->memory(fixture->cars[0]+0x900,&dynamics,sizeof dynamics));
+    for(unsigned wheel=0;wheel<4;wheel++) {
+        uint64_t tyre=0;assert(fixture->memory(dynamics+0x60+wheel*8,&tyre,sizeof tyre));
+        fixture->memory.put(tyre+0x88,0.f);
+    }
+    Sleep(210);frame(.2,nullptr);assert(view->cars[0].stint_laps==0);
+    fixture->live_cars[0].lap=8;Sleep(210);frame(.2,nullptr);assert(view->cars[0].stint_laps==1);
+    fixture->live_cars[0].pit_status=0;Sleep(210);frame(.2,nullptr);assert(view->cars[0].stint_laps==1);
+    fixture->live_cars[0].tyre_actual=19;
+    Sleep(210);frame(.2,nullptr);assert(view->cars[0].stint_laps==0);
+
     emit("session.end");assert(!view->session_type&&!view->session_kind&&!badge_view->cars[0].width);
-    current_kind=livewire::RACE;emit("session.start");Sleep(210);frame(.2,nullptr);
-    assert(view->session_type==15&&view->session_kind==livewire::RACE);
+    fixture->live_cars[0].lap=0;current_kind=livewire::RACE;emit("session.start");Sleep(210);frame(.2,nullptr);
+    assert(view->session_type==15&&view->session_kind==livewire::RACE&&view->cars[0].stint_laps==0);
     context_available=false;emit_context("flow.state");Sleep(210);frame(.2,nullptr);
     assert(view->session_type==15&&!view->session_kind&&view->count==24);
     context_available=true;current_kind=livewire::SPRINT;emit_context("flow.state");

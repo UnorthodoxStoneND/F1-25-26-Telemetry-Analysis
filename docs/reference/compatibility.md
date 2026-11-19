@@ -1,7 +1,7 @@
 # Compatibility and testing
 
-- **Operating system:** Windows x64.
-- **Launcher:** Swofty 1.9.76 and compatible later versions retaining launcher API 1, native binding API 9, Live State API 2 or later, CarOps API 1 or later, session callbacks and memory-check API 1. No maximum launcher version is imposed; future breaking API changes may require an update.
+- **Operating system:** Windows x64; experimental native Linux x64 helper with the game running under Proton/Wine.
+- **Launcher:** Swofty 1.9.80 and compatible later versions retaining launcher API 1, native binding API 9, Live State API 5 or later, CarOps API 1 or later, session callbacks and memory-check API 1. No maximum launcher version is imposed; future breaking API changes may require an update.
 - **Game:** F1 25 on Steam, including the 2026 Season Pack and My Team. Object readers support the inspected Steam layouts with PE timestamps `1789118616` and `1794312636`. Swofty resolves the addresses for the running build; object ownership, vehicle identity and vector bounds are checked before values are shown. Unsupported builds or missing bindings produce an explicit message.
 
 Automated checks cover the live readers, Live State/CarOps acquisition, session transitions, completed lap timing, tyre-pressure wheel order, shared-memory format and launcher views. In-game testing confirmed setup values display for all cars, with the player's values checked against the game. Resource improvements have not been measured across every supported build.
@@ -22,4 +22,14 @@ If the delay recurs, compare the first populated table and first standard badge 
 
 The [CI reference](../../tools/checks/README.md) lists sixteen individually reported validations. They check the add-on and its contracts against the minimum supported and latest stable Swofty releases. These checks do not replace an in-game test, antivirus scanning or validation of a future game update.
 
-Windows x64 is the supported platform. Automated Wine/Proton compatibility is not claimed.
+Windows remains the in-game-validated platform. The Linux helper, protocol host call, read-only IPC mapping, coherent image snapshots, session clearing and saved preferences were tested in Ubuntu WSL. Windows host tests verify shared file-mapping visibility and deletion on last close. These checks do not establish in-game Proton compatibility; a Linux tester must verify the complete launcher/game path.
+
+## Linux helper startup report and test.3
+
+The user supplied a report of the launcher error **F1 Live Telemetry has no Linux helper** on 19 November 2026. The previous manifest declared only a Windows program. Test.3 adds a native Linux x86-64 helper and a temporary Wine/Proton IPC mapping instead of attempting to access Win32 named mappings from native Linux. No Linux process-memory reader or network listener was added.
+
+Swofty's `addon_game_dir` host call supplies the actual installed game-copy path. Under Wine, the DLL creates a bounded temporary `.telemetry-live-*.ipc` mapping beside itself, shared read-only with the helper and deleted by the kernel on last close. Windows named mappings remain available, including for a Windows launcher running under Wine. Restart both launcher and game after updating. Any remaining Proton/runtime or path issue requires the tester's launcher/game logs.
+
+## In-game verification: 0.5.10-test.3 tyre icons
+
+On 19 November 2026, the user confirmed that the service-provided icons loaded for all five tested tyres. This confirms the tyre-image display in that test; it does not confirm Linux/Proton compatibility. Full in-game Linux/Proton testing remains outstanding.

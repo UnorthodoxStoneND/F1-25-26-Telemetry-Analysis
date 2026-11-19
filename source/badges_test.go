@@ -13,8 +13,8 @@ import (
 
 func badgeFixture() []byte {
 	b := make([]byte, badgeFrameSize)
-	copy(b, "USTBADG1")
-	binary.LittleEndian.PutUint32(b[8:], 1)
+	copy(b, "USTBADG2")
+	binary.LittleEndian.PutUint32(b[8:], 2)
 	binary.LittleEndian.PutUint32(b[12:], badgeFrameSize)
 	binary.LittleEndian.PutUint64(b[24:], 42)
 	at := 32
@@ -85,7 +85,7 @@ func TestBadgePixelsAndCache(t *testing.T) {
 }
 func TestBadgeValidationAndIdentity(t *testing.T) {
 	for _, change := range []func([]byte){
-		func(b []byte) { b[0] = 'X' }, func(b []byte) { b[8] = 2 }, func(b []byte) { b[12] = 0 },
+		func(b []byte) { b[0] = 'X' }, func(b []byte) { b[8] = 1 }, func(b []byte) { b[12] = 0 },
 		func(b []byte) { b[24] = 43 }, func(b []byte) { b[32] = 1 },
 		func(b []byte) { binary.LittleEndian.PutUint32(b[48:], 65) },
 		func(b []byte) { binary.LittleEndian.PutUint32(b[52:], 65) },
@@ -160,8 +160,48 @@ func TestNativeBadgesABI(t *testing.T) {
 	var cache badgeCache
 	cache.apply(b, &f)
 	checkBadgePNG(t, f.Cars[0].BadgePNG)
+	checkBadgePNG(t, f.Cars[0].TyrePNG)
 	data, err := json.Marshal(badgeCell(f.Cars[0]))
 	if err != nil || !bytes.Contains(data, []byte("image_data")) {
 		t.Fatal("native badge did not reach table cell", err)
+	}
+}
+
+func TestTyreImagesIndependentAndBounded(t *testing.T) {
+	b, f := badgeFixture(), badgeFrame()
+	at := 32 + maxCars*badgeRecordSize
+	copy(b[at:at+badgeRecordSize], b[32:32+badgeRecordSize])
+	copy(b[at+24:at+280], make([]byte, 256))
+	copy(b[at+24:], "#overrides.tyres.icon.custom_small")
+	var cache badgeCache
+	cache.apply(b, &f)
+	checkBadgePNG(t, f.Cars[0].TyrePNG)
+	if len(cache.images) != 2 {
+		t.Fatal("shared image cache lost a channel")
+	}
+	binary.LittleEndian.PutUint64(b[at+8:], 8)
+	b[at+280] = 200
+	before := f.Cars[0].TyrePNG
+	cache.apply(b, &f)
+	if f.Cars[0].TyrePNG == before || len(cache.images) != 2 {
+		t.Fatal("tyre revision not replaced")
+	}
+	binary.LittleEndian.PutUint64(b[at:], 999)
+	cache.apply(b, &f)
+	if f.Cars[0].TyrePNG != "" || f.Cars[0].BadgePNG == "" {
+		t.Fatal("wrong-car tyre or missing badge")
+	}
+	a := App{frame: badgeFrame(), mode: "full"}
+	a.frame.Cars[0].TyrePNG = testBadgePNG(t)
+	a.lastView, a.viewSent = a.viewState(), true
+	a.frame.Cars[0].TyrePNG = ""
+	if !a.needsView() {
+		t.Fatal("tyre disappearance not refreshed")
+	}
+	a.hidden[layoutPractice] = fieldBit(layoutPractice, "tyre")
+	a.lastView = a.viewState()
+	a.frame.Cars[0].TyrePNG = testBadgePNG(t)
+	if a.needsView() {
+		t.Fatal("hidden tyre image refreshed view")
 	}
 }

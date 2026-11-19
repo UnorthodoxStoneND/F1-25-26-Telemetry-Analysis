@@ -1,3 +1,5 @@
+//go:build windows
+
 package main
 
 import (
@@ -15,16 +17,6 @@ import (
 	"unsafe"
 )
 
-func fixture() []byte {
-	b := make([]byte, frameSize)
-	copy(b, "USTLIVE2")
-	binary.LittleEndian.PutUint32(b[8:], 2)
-	binary.LittleEndian.PutUint32(b[12:], frameSize)
-	binary.LittleEndian.PutUint32(b[40:], active)
-	binary.LittleEndian.PutUint32(b[48:], 1)
-	copy(b[256+140:], "Test Driver")
-	return b
-}
 func TestSnapshotValidation(t *testing.T) {
 	b := fixture()
 	binary.LittleEndian.PutUint32(b[256+4:], knownName)
@@ -58,17 +50,11 @@ func TestNativeABI(t *testing.T) {
 		t.Fatal(err)
 	}
 	f, err := decode(b)
-	if err != nil || f.Tick != 12345 || len(f.Cars) != 1 || f.Cars[0].Name != "ABI Driver" || f.Cars[0].Identity != 1234 || f.Cars[0].Compound != 18 || f.Cars[0].Visual != 17 || f.SessionType != 15 || f.SessionKind != 4 || f.Cars[0].Laps != 7 || f.Cars[0].GapAhead != 1234 || f.Cars[0].BestSectors != [3]uint32{20000, 30000, 30000} {
+	if err != nil || f.Tick != 12345 || len(f.Cars) != 1 || f.Cars[0].Name != "ABI Driver" || f.Cars[0].Identity != 1234 || f.Cars[0].Compound != 18 || f.Cars[0].Visual != 17 || f.SessionType != 15 || f.SessionKind != 4 || f.Cars[0].Laps != 7 || f.Cars[0].StintLaps != 3 || f.Cars[0].Known&knownStint == 0 || f.Cars[0].GapAhead != 1234 || f.Cars[0].BestSectors != [3]uint32{20000, 30000, 30000} {
 		t.Fatalf("C++/Go layout disagrees: %+v %v", f, err)
 	}
 }
-func grid() Frame {
-	f := Frame{Player: 12, State: active, Session: 1}
-	for n := 0; n < 24; n++ {
-		f.Cars = append(f.Cars, Car{Vehicle: uint32(n), Known: knownName | knownPosition | knownTyre, Position: int32(n + 1), Name: fmt.Sprintf("Driver %d", n+1), Compound: 18, Visual: 17, Identity: uint64(100 + n)})
-	}
-	return f
-}
+
 func TestNearestCars(t *testing.T) {
 	f := grid()
 	for _, tt := range []struct {
@@ -86,20 +72,19 @@ func TestNearestCars(t *testing.T) {
 		t.Fatal("unknown player guessed")
 	}
 }
-func TestCompoundColours(t *testing.T) {
-	for _, tt := range []struct {
-		actual, visual int32
-		label, colour  string
-	}{{18, 16, "C3", "#FF4A5B"}, {18, 17, "C3", "#FFD53F"}, {18, 18, "C3", "#EEF2FA"}, {19, 17, "C2", "#FFD53F"}, {7, 0, "INT", "#41DA8B"}, {8, 0, "WET", "#4B9FFF"}} {
-		b, _ := json.Marshal(tyreCell(Car{Known: knownTyre, Compound: tt.actual, Visual: tt.visual}))
-		if !bytes.Contains(b, []byte(tt.label)) || !bytes.Contains(b, []byte(tt.colour)) {
-			t.Fatalf("bad tyre: %s", b)
-		}
+func TestTyreImageCell(t *testing.T) {
+	c := badgeFrame().Cars[0]
+	c.TyrePNG = testBadgePNG(t)
+	raw, _ := json.Marshal(tyreCell(c))
+	if !bytes.Contains(raw, []byte("image_data")) || bytes.Contains(raw, []byte("colour")) {
+		t.Fatalf("not an image cell: %s", raw)
 	}
-	if tyreCell(Car{Known: knownTyre, Compound: 18}) != "C3" {
-		t.Fatal("guessed unknown colour")
+	c.TyrePNG = ""
+	if tyreCell(c) != "—" {
+		t.Fatal("missing image fabricated a compound")
 	}
 }
+
 func TestLiveViewAndSetup(t *testing.T) {
 	a := App{frame: grid(), enabled: true, mode: "full", status: "Live", highlight: true}
 	a.frame.Cars[12].WearKnown = 7
@@ -132,8 +117,9 @@ func TestLiveViewAndSetup(t *testing.T) {
 		enc := json.NewEncoder(file)
 		for i := range a.frame.Cars {
 			c := &a.frame.Cars[i]
-			c.Known |= knownLaps | knownGapAhead | knownGrid | knownBest | knownSectors | knownResult
+			c.Known |= knownLaps | knownGapAhead | knownGrid | knownBest | knownSectors | knownResult | knownStint
 			c.Laps, c.GapAhead, c.Grid = 7, 1234, int32(i+1)
+			c.StintLaps = 3
 			c.Best, c.BestSectors = 80000, [3]uint32{20000, 30000, 30000}
 			c.Flags = 2 << 8
 		}
@@ -142,6 +128,7 @@ func TestLiveViewAndSetup(t *testing.T) {
 			t.Fatal(e)
 		}
 		a.frame.Cars[12].BadgePNG = testBadgePNG(t)
+		a.frame.Cars[12].TyrePNG = testBadgePNG(t)
 		if e = enc.Encode(a.view()); e != nil {
 			t.Fatal(e)
 		}
@@ -151,6 +138,26 @@ func TestLiveViewAndSetup(t *testing.T) {
 			if e = enc.Encode(a.view()); e != nil {
 				t.Fatal(e)
 			}
+		}
+		for _, session := range []uint32{1, 5, 15} {
+			a.frame.SessionType = session
+			layout := layoutFor(a.frame)
+			a.columnsOpen = true
+			a.editorLayout = layout
+			if e = enc.Encode(a.view()); e != nil {
+				t.Fatal(e)
+			}
+			a.columnsOpen = false
+			a.hidden[layout] = fieldBit(layout, "position") | fieldBit(layout, "last")
+			if e = enc.Encode(a.view()); e != nil {
+				t.Fatal(e)
+			}
+			a.disabled[layout] = true
+			if e = enc.Encode(a.view()); e != nil {
+				t.Fatal(e)
+			}
+			a.disabled[layout] = false
+			a.hidden[layout] = 0
 		}
 		a.frame = Frame{Player: -1}
 		a.expanded = ""
@@ -243,7 +250,7 @@ func TestProtocolAndNoDiskWrites(t *testing.T) {
 	}
 }
 func TestReleasedAndFutureLauncherHandshake(t *testing.T) {
-	for _, launcher := range []string{"1.9.76", "1.10.0", "2.0.0"} {
+	for _, launcher := range []string{"1.9.80", "1.10.0", "2.0.0"} {
 		input := fmt.Sprintf(`{"id":1,"method":"hello","params":{"api":1,"launcher":%q,"data_dir":"unused","profile":{"enabled":false}}}`+"\n", launcher)
 		var output bytes.Buffer
 		if err := run(strings.NewReader(input), &output); err != nil || !bytes.Contains(output.Bytes(), []byte(`"api":1`)) {

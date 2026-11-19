@@ -29,7 +29,25 @@ def pe_debug(payload,tail=b''):
     raw[512+len(blob):]=strings
     return bytes(raw)
 
+def elf_debug(payload):
+    names=b'\0.shstrtab\0.debug_info\0'
+    blob=struct.pack('<IIQQ',1,0,len(payload),1)+zlib.compress(payload)
+    raw=bytearray(512+len(blob));raw[:6]=b'\x7fELF\x02\x01'
+    struct.pack_into('<Q',raw,40,64);struct.pack_into('<HHH',raw,58,64,3,1)
+    struct.pack_into('<I',raw,128,1);struct.pack_into('<QQ',raw,152,320,len(names))
+    struct.pack_into('<I',raw,192,11);struct.pack_into('<Q',raw,200,0x800)
+    struct.pack_into('<QQ',raw,216,512,len(blob));raw[320:320+len(names)]=names;raw[512:]=blob
+    return bytes(raw)
+
 class PrivacyTests(unittest.TestCase):
+    def test_linux_elf_debug_is_decompressed_and_checked(self):
+        payload=b'Go Linux debug: trimmed/module/main.go'
+        raw=elf_debug(payload)
+        self.assertTrue(privacy_scan_bytes(raw).endswith(payload))
+        privacy('telemetry-live-linux',raw)
+        for value in (PRIVATE,PERSONAL):
+            with self.assertRaises(AssertionError):privacy('telemetry-live-linux',elf_debug(value))
+
     def test_compressed_debug_is_scanned_as_decompressed_text(self):
         payload=b'Go debug symbols: trimmed/module/main.go'
         raw=pe_debug(payload)

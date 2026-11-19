@@ -2,7 +2,7 @@
   "schema_version": 1,
   "id": "unorthodoxstonendmodding.udp-telemetry",
   "name": "F1 Live Telemetry",
-  "version": "0.5.9",
+  "version": "0.5.10-test.4",
   "author": "UnorthodoxStoneNDmodding",
   "description": "Live driver positions, tyres, wear, lap times and car setups, read from the game through Swofty's binding system. Live display only; no UDP or recording.",
   "license": "MIT",
@@ -10,7 +10,7 @@
   "category": "utility",
   "icon": "icon.png",
   "kind": ["native"],
-  "compat": {"game": "f1_25", "launcher": ">=1.9.76", "platforms": ["steam"]},
+  "compat": {"game": "f1_25", "launcher": ">=1.9.80", "platforms": ["steam"]},
   "requires": [{"id": "swofty.core", "version": ">=0.1.0"}],
   "experimental_features": ["telemetry"],
   "saves": {"affects": false},
@@ -19,11 +19,14 @@
       "id": "drivers_shown", "type": "choice", "label": "Drivers shown", "default": "nearest", "binds": "native",
       "values": [{"value": "nearest", "label": "Nearest cars (you + 4)"}, {"value": "full", "label": "Full grid"}]
     },
-    {"id": "highlight_player", "type": "toggle", "label": "Highlight my row", "default": false, "binds": "native"}
+    {"id": "highlight_player", "type": "toggle", "label": "Highlight my row", "default": false, "binds": "native"},
+    {"id": "show_practice", "type": "toggle", "label": "Practice session view", "default": true, "binds": "native"},
+    {"id": "show_qualifying", "type": "toggle", "label": "Qualifying / Sprint Qualifying session view", "default": true, "binds": "native"},
+    {"id": "show_race", "type": "toggle", "label": "Sprint / Race session view", "default": true, "binds": "native"}
   ],
   "operations": {"native": [{"dll": "bin/telemetry-live.dll"}]},
   "launcher": {
-    "program": {"windows": "bin/telemetry-live.exe"},
+    "program": {"windows": "bin/telemetry-live.exe", "linux": "bin/telemetry-live-linux"},
     "sections": [{"id": "telemetry", "title": "Live Telemetry", "icon": "activity"}],
     "startup": true
   }

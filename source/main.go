@@ -8,10 +8,11 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
-const addonVersion = "0.5.9"
+const addonVersion = "0.5.10-test.4"
 const addonID = "unorthodoxstonendmodding.udp-telemetry"
 
 type M = map[string]any
@@ -29,6 +30,12 @@ type App struct {
 	expanded                        string
 	lastView                        viewState
 	viewSent                        bool
+	disabled                        [3]bool
+	hidden                          [3]uint32
+	columnPath                      string
+	columnsOpen                     bool
+	editorLayout                    sessionLayout
+	columnGeneration                uint64
 }
 
 func (a *App) profile(raw json.RawMessage) {
@@ -44,6 +51,7 @@ func (a *App) profile(raw json.RawMessage) {
 		a.reader.Close()
 		a.frame = Frame{Player: -1}
 		a.expanded = ""
+		a.columnsOpen = false
 	}
 	a.profileName = p.Name
 	a.enabled = p.Enabled && !p.Vanilla
@@ -51,15 +59,13 @@ func (a *App) profile(raw json.RawMessage) {
 func (a *App) syncOptions() {
 	a.mode = "nearest"
 	a.highlight = false
+	a.disabled = [3]bool{}
+	a.loadColumns()
 	name := a.profileName
-	if name == "" || len(name) > 40 || a.data == "" {
+	if !validProfile(name) || a.data == "" {
 		return
 	}
-	for _, ch := range name {
-		if !(ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z' || ch >= '0' && ch <= '9' || ch == '-' || ch == '_') {
-			return
-		}
-	}
+
 	file, err := os.Open(filepath.Join(filepath.Dir(filepath.Dir(a.data)), "profiles", name+".json"))
 	if err != nil {
 		return
@@ -77,6 +83,16 @@ func (a *App) syncOptions() {
 		a.mode = mode
 	}
 	_ = json.Unmarshal(options["highlight_player"], &a.highlight)
+	for layout, key := range []string{"show_practice", "show_qualifying", "show_race"} {
+		var on bool
+		if raw := options[key]; string(raw) != "null" && json.Unmarshal(raw, &on) == nil {
+			a.disabled[layout] = !on
+		}
+	}
+	if a.disabled[layoutFor(a.frame)] {
+		a.expanded = ""
+		a.columnsOpen = false
+	}
 }
 func (a *App) refresh() {
 	a.syncOptions()
@@ -98,6 +114,7 @@ func (a *App) refresh() {
 	}
 	if f.Session != a.frame.Session || layoutFor(f) != layoutFor(a.frame) {
 		a.expanded = ""
+		a.columnsOpen = false
 	}
 	a.frame = f
 	a.status = "Live"
@@ -119,6 +136,7 @@ func (a *App) refresh() {
 func (a *App) event(raw json.RawMessage) (string, error) {
 	var p struct {
 		Event struct {
+			Click  struct{ ID string }
 			Submit struct {
 				Form, Row string
 				Values    map[string]json.RawMessage
@@ -129,10 +147,13 @@ func (a *App) event(raw json.RawMessage) (string, error) {
 		return "", err
 	}
 	s := p.Event.Submit
+	if handled, effect, err := a.columnEvent(p.Event.Click.ID, s.Form, s.Values); handled {
+		return effect, err
+	}
 	if s.Form != "drivers" && !strings.HasPrefix(s.Form, "drivers-after-") {
 		return "none", nil
 	}
-	if layoutFor(a.frame) == layoutRace {
+	if layoutFor(a.frame) == layoutRace || a.disabled[layoutFor(a.frame)] || !a.fieldVisible(layoutFor(a.frame), "setup") {
 		return "none", nil
 	}
 	var open bool
@@ -199,6 +220,27 @@ func run(in io.Reader, out io.Writer) error {
 			if p.Section != "telemetry" {
 				err = fmt.Errorf("unknown section")
 				break
+			}
+			if runtime.GOOS == "linux" && a.enabled {
+				// Host calls are answered before the launcher sends another request.
+				send(M{"id": 1000001, "method": "addon_game_dir", "params": nil})
+				if !scanner.Scan() {
+					return scanner.Err()
+				}
+				var reply struct {
+					ID     uint64
+					Result *string
+					Error  json.RawMessage
+				}
+				if json.Unmarshal(scanner.Bytes(), &reply) != nil || reply.ID != 1000001 || len(reply.Error) > 0 && string(reply.Error) != "null" {
+					err = fmt.Errorf("The launcher's add-on game directory is unavailable")
+					break
+				}
+				dir := ""
+				if reply.Result != nil {
+					dir = *reply.Result
+				}
+				a.reader.setAddonDir(dir)
 			}
 			a.refresh()
 			if msg.Method == "view" {

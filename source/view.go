@@ -77,6 +77,8 @@ func visibleInto(f Frame, mode string, storage []Car) []Car {
 // until one of its inputs changes. Fixed storage bounds the retained state.
 type viewState struct {
 	Layout                             sessionLayout
+	Hidden                             uint32
+	Disabled, ColumnsOpen              bool
 	SessionBest                        uint32
 	Session                            uint64
 	SessionLabel                       string
@@ -89,22 +91,33 @@ type viewState struct {
 
 func (a *App) viewState() viewState {
 	layout := layoutFor(a.frame)
-	state := viewState{Layout: layout, Session: a.frame.Session, Player: a.frame.Player,
-		SessionLabel: sessionSummary(a.frame),
+	state := viewState{Layout: layout, Hidden: a.hidden[layout], Disabled: a.disabled[layout], ColumnsOpen: a.columnsOpen, Session: a.frame.Session, Player: a.frame.Player,
+		SessionLabel: a.pageSubtitle(),
 		Status:       a.status, Diagnostic: a.frame.Diagnostic, Mode: a.mode,
 		Expanded: a.expanded, Highlight: a.highlight, Active: a.frame.State&active != 0}
-	if layout == layoutQualifying {
+
+	if a.disabled[layout] || len(a.selectedColumns(layout)) == 0 {
+		return state
+	}
+	if layout == layoutQualifying && a.fieldVisible(layout, "gap") {
 		state.SessionBest = sessionBest(a.frame)
 	}
-	if layout == layoutRace {
+	if layout == layoutRace || !a.fieldVisible(layout, "setup") {
 		state.Expanded = ""
 	}
 	var storage [maxCars]Car
 	for n, c := range visibleInto(a.frame, a.mode, storage[:0]) {
 		c.Flags &= inPitLane | resultMask
-		c.Known &= knownName | knownPosition | knownGrid | knownTyre | knownLast | knownBest | knownPit | knownResult | knownLaps | knownGapAhead | knownSectors
+		c.Known &= knownName | knownPosition | knownGrid | knownTyre | knownLast | knownBest | knownPit | knownResult | knownLaps | knownGapAhead | knownSectors | knownStint
 		if !badgeRowReady(c) {
 			c.BadgePNG = ""
+			c.TyrePNG = ""
+		}
+		if !a.fieldVisible(layout, "team") {
+			c.BadgePNG = ""
+		}
+		if !a.fieldVisible(layout, "tyre") {
+			c.TyrePNG = ""
 		}
 		if c.Known&knownResult == 0 {
 			c.Flags &^= resultMask
@@ -155,19 +168,53 @@ func (a *App) viewState() viewState {
 		if c.Known&knownSectors == 0 {
 			c.BestSectors = [3]uint32{}
 		}
+		if layout != layoutRace || !a.fieldVisible(layout, "stint") {
+			c.Known &^= knownStint
+		}
+		if c.Known&knownStint == 0 {
+			c.StintLaps = 0
+		}
 		c.WearKnown &= 15
 		for wheel := range c.Wear {
 			if c.WearKnown&(1<<wheel) == 0 {
 				c.Wear[wheel] = 0
 			}
 		}
-		if layout == layoutRace || a.expanded == "" || a.expanded != rowID(a.frame, c) {
+		if layout == layoutRace || !a.fieldVisible(layout, "setup") || a.expanded == "" || a.expanded != rowID(a.frame, c) {
 			c.SetupKnown = 0
 		}
 		c.SetupKnown &= (1 << 21) - 1
 		for setting := range c.Setup {
 			if c.SetupKnown&(1<<setting) == 0 {
 				c.Setup[setting] = 0
+			}
+		}
+		if !a.fieldVisible(layout, "last") {
+			c.Known &^= knownLast
+			c.Last = 0
+		}
+		if !a.fieldVisible(layout, "laps") {
+			c.Known &^= knownLaps
+			c.Laps = 0
+		}
+		if !a.fieldVisible(layout, "gap") {
+			c.Known &^= knownGapAhead
+			c.GapAhead = 0
+		}
+		if !a.fieldVisible(layout, "best") && !(layout == layoutQualifying && a.fieldVisible(layout, "gap")) {
+			c.Known &^= knownBest
+			c.Best = 0
+		}
+		if !a.fieldVisible(layout, "S1") && !a.fieldVisible(layout, "S2") && !a.fieldVisible(layout, "S3") {
+			c.Known &^= knownSectors
+			c.BestSectors = [3]uint32{}
+		}
+		if layout == layoutRace && !a.fieldVisible(layout, "Avg") {
+			for i, key := range []string{"RL", "RR", "FL", "FR"} {
+				if !a.fieldVisible(layout, key) {
+					c.WearKnown &^= 1 << i
+					c.Wear[i] = 0
+				}
 			}
 		}
 		state.Cars[n] = c
@@ -188,18 +235,6 @@ type wearValue struct {
 	Sort float32 `json:"sort"`
 	Tone string  `json:"tone"`
 }
-type colourField struct {
-	Value    string `json:"value"`
-	Disabled bool   `json:"disabled"`
-}
-type colourEdit struct {
-	Colour colourField `json:"colour"`
-}
-type tyreValue struct {
-	Text string     `json:"text"`
-	Sort string     `json:"sort"`
-	Edit colourEdit `json:"edit"`
-}
 type toggleField struct {
 	Value bool `json:"value"`
 }
@@ -212,34 +247,12 @@ type toggleValue struct {
 }
 
 func tyreCell(c Car) any {
-	if c.Known&knownTyre == 0 {
+	if c.TyrePNG == "" || !badgeRowReady(c) {
 		return "—"
 	}
-	labels := map[int32]string{16: "C5", 17: "C4", 18: "C3", 19: "C2", 20: "C1", 7: "INT", 8: "WET"}
-	label := labels[c.Compound]
-	if label == "" {
-		return "—"
-	}
-	colour := ""
-	switch c.Visual {
-	case 16:
-		colour = "#FF4A5B"
-	case 17:
-		colour = "#FFD53F"
-	case 18:
-		colour = "#EEF2FA"
-	}
-	if c.Compound == 7 {
-		colour = "#41DA8B"
-	}
-	if c.Compound == 8 {
-		colour = "#4B9FFF"
-	}
-	if colour == "" {
-		return label
-	} // Never guess a dry tyre's colour from its absolute compound.
-	return tyreValue{Text: label, Sort: label, Edit: colourEdit{Colour: colourField{Value: colour, Disabled: true}}}
+	return M{"image_data": M{"png": c.TyrePNG, "width": 24, "height": 24, "fit": "contain", "transparent": true}, "sort": c.Compound}
 }
+
 func wearCell(value float32, known bool) any {
 	if !known {
 		return textValue{Text: "—", Tone: "muted"}
@@ -288,18 +301,28 @@ func setupDetail(c Car) []M {
 }
 func (a *App) view() M {
 	layout := layoutFor(a.frame)
+	selected := a.selectedColumns(layout)
+	if a.disabled[layout] || len(selected) == 0 {
+		message := "All columns are hidden. Use Columns to choose what to show."
+		actions := []M{{"id": "columns", "label": "Columns", "style": "ghost"}}
+		if a.disabled[layout] {
+			message = "Disabled for this session. Enable " + layoutNames[layout] + " in the add-on settings."
+			actions = []M{}
+		}
+		return a.withColumns(M{"subtitle": a.pageSubtitle(), "tick": true, "actions": actions, "body": M{"blocks": []M{textBlock(message)}}}, layout)
+	}
 	best := sessionBest(a.frame)
 	blocks := []M{}
 	batch := []M{}
 	suffix := ""
 	flush := func() {
 		if len(batch) > 0 {
-			blocks = append(blocks, M{"table": M{"id": "drivers" + suffix, "columns": columns(layout), "rows": batch, "compact": true}})
+			blocks = append(blocks, M{"table": M{"id": "drivers" + suffix, "columns": selected, "rows": batch, "compact": true}})
 			batch = []M{}
 		}
 	}
 	for _, c := range visible(a.frame, a.mode) {
-		open := layout != layoutRace && a.expanded == rowID(a.frame, c)
+		open := layout != layoutRace && a.fieldVisible(layout, "setup") && a.expanded == rowID(a.frame, c)
 		cells := driverCells(c, layout, best, open)
 		row := M{"id": rowID(a.frame, c), "cells": cells}
 		if retirementLabel(c) != "" {
@@ -318,6 +341,7 @@ func (a *App) view() M {
 		} else if a.highlight && int32(c.Vehicle) == a.frame.Player {
 			row["tone"] = "accent"
 		}
+		row["cells"] = a.selectedCells(layout, cells)
 		batch = append(batch, row)
 		if open {
 			flush()
@@ -331,14 +355,21 @@ func (a *App) view() M {
 		if a.frame.State&active != 0 && a.mode != "full" {
 			message = "Waiting to identify your car. Full grid is available in the add-on settings."
 		}
-		blocks = append(blocks, M{"table": M{"id": "drivers", "columns": columns(layout), "rows": []M{}, "compact": true, "empty": message}})
+		blocks = append(blocks, M{"table": M{"id": "drivers", "columns": selected, "rows": []M{}, "compact": true, "empty": message}})
 	}
 	if a.frame.Diagnostic != "" {
 		blocks = append(blocks, textBlock(a.frame.Diagnostic))
 	}
+	return a.withColumns(M{"subtitle": a.pageSubtitle(), "tick": true, "actions": []M{{"id": "columns", "label": "Columns", "style": "ghost"}}, "body": M{"blocks": blocks}}, layout)
+}
+func (a *App) pageSubtitle() string {
 	subtitle := a.status
-	if summary := sessionSummary(a.frame); summary != "" {
+	frame := a.frame
+	if !a.fieldVisible(layoutFor(frame), "counter") {
+		frame.State &^= sessionTimer | sessionLaps
+	}
+	if summary := sessionSummary(frame); summary != "" {
 		subtitle += " · " + summary
 	}
-	return M{"subtitle": subtitle + " · v" + addonVersion, "tick": true, "body": M{"blocks": blocks}}
+	return subtitle + " · v" + addonVersion
 }

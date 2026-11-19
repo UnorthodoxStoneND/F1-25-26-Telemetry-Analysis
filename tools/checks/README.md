@@ -47,3 +47,7 @@ Normal developer use of native/build.py still builds and runs its native tests.
 The --build-only option is for CI's separately reported test jobs.
 
 The package-integrity check also verifies the bundled browser icon, its size/shape, the description/category/repository fields and Steam compatibility metadata. The packaging script builds one complete ZIP for GitHub and the Addon Browser.
+
+The additional **Linux helper and shared transport** job runs portable and Linux IPC/host-call tests plus vet on Ubuntu. The shared Windows build also cross-compiles the native Linux helper into the package. Native reader checks exercise the temporary file-mapping lifecycle; image fixtures cover both team badges and fitted tyre icons. These checks do not launch F1 25 under Proton.
+
+Stint-counter regressions run with the native reader checks. They cover initial counts, same/different compounds, drive-throughs, invalid readings, rewinds and lifecycle resets; the real publisher test confirms counts reach the committed snapshot. Portable UI tests cover column placement, zero/unknown values, hidden-field refresh and saved-key compatibility.

@@ -130,7 +130,7 @@ int main(int argc,char** argv) {
     life.frame.cars[0].vehicle=0;life.frame.cars[0].identity=1234;life.frame.cars[0].known=livewire::NAME|livewire::POSITION|livewire::TYRES;
     life.frame.cars[0].position=1;life.frame.cars[0].compound=18;life.frame.cars[0].visual=17;std::memcpy(life.frame.cars[0].name,"ABI Driver",11);life.stamp(12345);
     auto& abi=life.frame.cars[0];abi.known|=livewire::LAPS|livewire::GAP_AHEAD|livewire::BEST|livewire::BEST_SECTORS;
-    abi.laps=7;abi.gap_ahead_ms=1234;abi.best_ms=80000;abi.best_sectors[0]=20000;abi.best_sectors[1]=30000;abi.best_sectors[2]=30000;
+    abi.known|=livewire::STINT;abi.stint_laps=3;abi.laps=7;abi.gap_ahead_ms=1234;abi.best_ms=80000;abi.best_sectors[0]=20000;abi.best_sectors[1]=30000;abi.best_sectors[2]=30000;
     if(argc>1){std::ofstream out(argv[1],std::ios::binary);out.write(reinterpret_cast<const char*>(&life.frame),sizeof life.frame);assert(out.good());}
     std::cout<<"PASS: 32-driver advancing garage counters rejected; complete/partial/invalid laps, rewind, wear/setup, lifecycle and ABI\n";
 }

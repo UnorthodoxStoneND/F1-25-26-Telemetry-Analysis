@@ -29,6 +29,8 @@ def inspect(path):
     return dict(subsystem=u16(opt+68),flags=u16(opt+70),imports=imports,sections=[s[0] for s in sections])
 
 def main():
+    elf=(ROOT/'bin/telemetry-live-linux').read_bytes()
+    assert elf[:6]==b'\x7fELF\x02\x01' and struct.unpack_from('<H',elf,18)[0]==62,'Linux helper must be x86-64 ELF'
     exe=inspect(ROOT/'bin/telemetry-live.exe')
     dll=inspect(ROOT/'bin/telemetry-live.dll')
     assert exe['subsystem']==3,'Helper must retain the tested console subsystem'

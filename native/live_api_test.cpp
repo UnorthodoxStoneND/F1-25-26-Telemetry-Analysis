@@ -20,6 +20,11 @@ int badge_reference(uint32_t,char* out,uint32_t cap) {
  if(std::strlen(ref)>=cap)return SWOFTY_ASSET_INVALID;
  std::memcpy(out,ref,std::strlen(ref)+1);return SWOFTY_ASSET_OK;
 }
+int tyre_reference(uint32_t,char* out,uint32_t cap) {
+ const char* ref="#overrides.tyres.icon.tyre_compound_custom_small";
+ if(std::strlen(ref)>=cap)return SWOFTY_ASSET_INVALID;
+ std::memcpy(out,ref,std::strlen(ref)+1);return SWOFTY_ASSET_OK;
+}
 int badge_image(const char* ref,uint8_t* out,uint32_t cap,uint32_t* width,uint32_t* height,uint64_t* revision) {
  image_calls++;
  assert(ref&&cap==badgewire::PIXELS);
@@ -74,6 +79,13 @@ void test_badges(const char* output) {
  assert(image.identity==1234&&image.reference[0]=='#');
  image_live=false;publisher.prefetch(&api);assert(image_calls==3);image_live=true;
  prefetch_cars=33;publisher.prefetch(&api);assert(image_calls==3);prefetch_cars=3;
+ // Version-gated tyre references use the same image service and clear on late data.
+ api.version=5;api.tyre_icon_texture=tyre_reference;
+ publisher.sample(&api,f);auto& tyre=publisher.frame.tyres[0];
+ assert(tyre.identity==1234&&tyre.width==2&&!std::strcmp(tyre.reference,"#overrides.tyres.icon.tyre_compound_custom_small"));
+ image_result=SWOFTY_ASSET_LATE;publisher.sample(&api,f);assert(!tyre.identity&&!image.identity);
+ image_result=SWOFTY_ASSET_OK;api.version=4;publisher.sample(&api,f);assert(!tyre.identity&&image.identity);
+ api.version=5;
  // Cross-language fixture: caller-owned RGBA, custom reference and alpha.
  f.state=livewire::ACTIVE;f.session=42;custom_badge=true;publisher.sample(&api,f);
  if(output){std::ofstream out(output,std::ios::binary);out.write(reinterpret_cast<const char*>(&publisher.frame),sizeof publisher.frame);assert(out.good());}

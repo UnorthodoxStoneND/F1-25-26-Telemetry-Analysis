@@ -27,7 +27,7 @@ class PackagingTests(unittest.TestCase):
         self.source = self.workspace/'Source'
         for folder in ('source', 'native', 'bin'):
             (self.source/folder).mkdir(parents=True, exist_ok=True)
-        for name in ('README.md', 'CHANGELOG.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md', 'source/go.mod', 'native/SDK-LICENSE.txt', 'bin/telemetry-live.exe', 'bin/telemetry-live.dll'):
+        for name in ('README.md', 'CHANGELOG.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md', 'source/go.mod', 'native/SDK-LICENSE.txt', 'bin/telemetry-live.exe', 'bin/telemetry-live.dll', 'bin/telemetry-live-linux'):
             (self.source/name).write_bytes(b'fixture')
         (self.source/'icon.png').write_bytes(b'\x89PNG\r\n\x1a\nfixture')
         shutil.copy2(ROOT/'source/package.py', self.source/'source/package.py')

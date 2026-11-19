@@ -7,7 +7,7 @@ import tempfile
 root=Path(__file__).resolve().parents[2]
 with tempfile.TemporaryDirectory() as temp:
     path=Path(temp)/'unused'
-    requests=[{'id':1,'method':'hello','params':{'api':1,'launcher':'1.9.76','data_dir':str(path),'profile':{'name':'default','enabled':True}}},
+    requests=[{'id':1,'method':'hello','params':{'api':1,'launcher':'1.9.80','data_dir':str(path),'profile':{'name':'default','enabled':True}}},
               {'id':2,'method':'view','params':{'section':'telemetry'}},
               {'id':3,'method':'view','params':{'section':'analysis'}},
               {'id':4,'method':'summary','params':{}}]

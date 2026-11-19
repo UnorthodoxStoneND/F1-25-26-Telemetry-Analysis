@@ -7,7 +7,7 @@ namespace livewire {
 constexpr unsigned VERSION = 2, CARS = 32, SETTINGS = 21;
 // Preserve wire bit values; former readiness bits are unused.
 enum State : uint32_t { ACTIVE=1, PAUSED=2, ENDED=32, SESSION_TIMER=128, SESSION_LAPS=256 };
-enum Known : uint32_t { NAME=1, POSITION=2, GRID=4, TYRES=8, LAST=16, BEST=32, PIT=64, RESULT=128, LAPS=256, GAP_AHEAD=512, BEST_SECTORS=1024 };
+enum Known : uint32_t { NAME=1, POSITION=2, GRID=4, TYRES=8, LAST=16, BEST=32, PIT=64, RESULT=128, LAPS=256, GAP_AHEAD=512, BEST_SECTORS=1024, STINT=2048 };
 enum CarFlag : uint32_t { IN_PIT_LANE=2 };
 enum SessionKind : uint32_t { SESSION_UNKNOWN=0, PRACTICE=1, QUALIFYING=2, RACE=3, SPRINT=4, TIME_TRIAL=5 };
 // Result status occupies bits 8..10 without changing the shared-memory layout.
@@ -26,7 +26,7 @@ struct Car {
     uint32_t laps;
     int32_t gap_ahead_ms;
     uint32_t best_sectors[3];
-    uint32_t reserved;
+    uint32_t stint_laps; // former reserved word; valid only with STINT
 };
 struct Frame {
     char magic[8];
@@ -41,6 +41,6 @@ struct Frame {
     char diagnostic[192];
     Car cars[CARS];
 };
-static_assert(sizeof(Car)==304 && offsetof(Car,identity)==272 && offsetof(Car,laps)==280 && offsetof(Car,best_sectors)==288);
+static_assert(sizeof(Car)==304 && offsetof(Car,identity)==272 && offsetof(Car,laps)==280 && offsetof(Car,best_sectors)==288 && offsetof(Car,stint_laps)==300);
 static_assert(offsetof(Frame,sequence)==16 && offsetof(Frame,cars)==256 && sizeof(Frame)==9984);
 }
