@@ -1,6 +1,6 @@
 # F1 25/26 Live Telemetry [Swofty Add-On]
 
-Live telemetry and car setups inside Swofty Launcher for F1 25 and the 2026 Season Pack, including My Team. Version **0.5.10-test.4** is live-only: no UDP configuration, recording or post-session analysis.
+Live telemetry and car setups inside Swofty Launcher for F1 25 and the 2026 Season Pack, including My Team. Version **0.5.10** is live-only: no UDP configuration, recording or post-session analysis.
 
 ## Features
 
@@ -18,7 +18,7 @@ See the [live-data reference](https://github.com/UnorthodoxStoneND/F1-25-26-Tele
 
 ## Install
 
-Use the locally supplied **`F1_Telemetry_v0.5.10-test.4.zip`** test build. This version has not been published. In Swofty, open **Addons** and select **Install addon from computer**. Enable **F1 Live Telemetry** in the active profile and restart Swofty and the game after updating.
+Install **`F1_Telemetry_v0.5.10.zip`** from [GitHub Releases](https://github.com/UnorthodoxStoneND/F1-25-26-Telemetry-Analysis/releases). In Swofty, open **Addons** and select **Install addon from computer**. Enable **F1 Live Telemetry** in the active profile and restart Swofty and the game after updating.
 
 The native DLL uses the same Microsoft Visual C++ v14 x64 runtime family as Swofty Launcher. If a runtime dependency is missing, install or repair [Microsoft's official x64 runtime](https://aka.ms/vc14/vc_redist.x64.exe).
 
@@ -27,7 +27,7 @@ Follow the [installation guide](https://github.com/UnorthodoxStoneND/F1-25-26-Te
 ## Supported platforms
 
 - Windows x64.
-- Experimental native Linux x64 helper for F1 25 under Proton/Wine. Helper/transport tests pass in Ubuntu WSL; in-game Linux validation is still required.
+- **Linux support is a work in progress (WIP) and may not be fully functional.** The experimental native Linux x64 helper for F1 25 under Proton/Wine has passed helper/transport tests in Ubuntu WSL, but the complete in-game path has not been validated.
 - Swofty 1.9.80 and compatible later versions retaining the required APIs.
 - F1 25 on Steam, including the 2026 Season Pack and My Team, on the supported game layouts.
 

@@ -2,7 +2,7 @@
   "schema_version": 1,
   "id": "unorthodoxstonendmodding.udp-telemetry",
   "name": "F1 Live Telemetry",
-  "version": "0.5.10-test.4",
+  "version": "0.5.10",
   "author": "UnorthodoxStoneNDmodding",
   "description": "Live driver positions, tyres, wear, lap times and car setups, read from the game through Swofty's binding system. Live display only; no UDP or recording.",
   "license": "MIT",

@@ -1,6 +1,8 @@
 # Installation
 
-1. Use the locally supplied **`F1_Telemetry_v0.5.10-test.4.zip`** test build. This version has not been published.
+**Linux support is a work in progress (WIP) and may not be fully functional.** The included Linux x64 helper is experimental; full in-game Linux/Proton operation has not been validated. Windows remains the in-game-validated platform.
+
+1. Download **`F1_Telemetry_v0.5.10.zip`** from [GitHub Releases](https://github.com/UnorthodoxStoneND/F1-25-26-Telemetry-Analysis/releases).
 2. Close the game. In Swofty, open **Addons**, select **Install addon from computer**, and choose the ZIP.
 3. Enable **F1 Live Telemetry** in your active profile. Configure **Drivers shown** and **Highlight my row** in its settings.
 4. Restart Swofty after replacing an earlier version, then launch the game through Swofty so its native component is loaded. Open **Live Telemetry** in the launcher.
