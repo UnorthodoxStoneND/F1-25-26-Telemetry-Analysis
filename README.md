@@ -27,7 +27,7 @@ Follow the [installation guide](https://github.com/UnorthodoxStoneND/F1-25-26-Te
 ## Supported platforms
 
 - Windows x64.
-- Experimental native Linux x64 helper for F1 25 under Proton/Wine. Helper/transport tests pass in Ubuntu WSL; in-game Linux validation is still required.
+- **Linux support is a work in progress (WIP) and may not be fully functional.** The experimental native Linux x64 helper for F1 25 under Proton/Wine has passed helper/transport tests in Ubuntu WSL, but the complete in-game path has not been validated.
 - Swofty 1.9.80 and compatible later versions retaining the required APIs.
 - F1 25 on Steam, including the 2026 Season Pack and My Team, on the supported game layouts.
 

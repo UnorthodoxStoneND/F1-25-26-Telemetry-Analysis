@@ -6,7 +6,7 @@
 - Add an inline Columns panel with immediately saved per-profile, per-session-group visibility, Reset defaults and all-hidden recovery.
 - Require Swofty 1.9.80 and display fitted-tyre icons through Live State v5 and the image service, synchronized with telemetry and team badges.
 - Add calculated, sortable Stint laps in Sprint/Race views, resetting after observed tyre changes including same-compound fresh sets. Keep bounded observations in memory without recording telemetry.
-- Include an experimental native Linux x64 helper and temporary Wine/Proton shared transport, addressing the missing Linux helper error.
+- Include an experimental native Linux x64 helper and temporary Wine/Proton shared transport, addressing the missing Linux helper error. **Linux support is a work in progress (WIP) and may not be fully functional; full in-game Linux/Proton validation remains outstanding.**
 - Promote the 0.5.10-test.4 functionality. Recorded Windows/Linux helper, native, schema and package checks passed; in-game testing confirmed all five tested tyre icons. Full in-game Linux/Proton and stint-count validation remain outstanding.
 
 ## 0.5.10-test.4 — 19 November 2026
