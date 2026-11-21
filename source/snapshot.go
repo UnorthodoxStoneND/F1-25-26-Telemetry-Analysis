@@ -8,30 +8,36 @@ import (
 	"strings"
 )
 
-const frameSize = 9984
-const carSize = 304
+const frameSize = 10752
+const carSize = 328
 const maxCars = 32
 const (
-	active       = 1
-	paused       = 2
-	sessionTimer = 128
-	sessionLaps  = 256
+	active              = 1
+	paused              = 2
+	sessionTimer        = 128
+	sessionLaps         = 256
+	windowReady         = 512
+	classificationOrder = 1024
 )
 const (
-	knownName     = 1
-	knownPosition = 2
-	knownGrid     = 4
-	knownTyre     = 8
-	knownLast     = 16
-	knownBest     = 32
-	knownPit      = 64
-	knownResult   = 128
-	knownLaps     = 256
-	knownGapAhead = 512
-	knownSectors  = 1024
-	knownStint    = 2048
+	knownName        = 1
+	knownPosition    = 2
+	knownGrid        = 4
+	knownTyre        = 8
+	knownLast        = 16
+	knownBest        = 32
+	knownPit         = 64
+	knownResult      = 128
+	knownLaps        = 256
+	knownGapAhead    = 512
+	knownSectors     = 1024
+	knownTyreAge     = 2048
+	knownLastSectors = 4096
+	knownPenalties   = 8192
+	knownTimePenalty = 16384
 )
 const inPitLane = 2
+const outLap = 4
 const resultMask = 7 << 8
 
 type Car struct {
@@ -46,9 +52,12 @@ type Car struct {
 	Flags                             uint32
 	Identity                          uint64
 	Laps                              uint32
-	StintLaps                         uint32
+	TyreAgeLaps                       uint32
 	GapAhead                          int32
 	BestSectors                       [3]uint32
+	LastSectors                       [3]uint32
+	DriveThrough, StopGo              uint8
+	TimePenaltyMS                     uint32
 }
 type Frame struct {
 	Session, Tick uint64
@@ -72,7 +81,7 @@ func decode(b []byte) (Frame, error) {
 }
 func decodeInto(b []byte, storage []Car) (Frame, error) {
 	f := Frame{Player: -1}
-	if len(b) != frameSize || string(b[:8]) != "USTLIVE2" || binary.LittleEndian.Uint32(b[8:]) != 2 || binary.LittleEndian.Uint32(b[12:]) != frameSize {
+	if len(b) != frameSize || string(b[:8]) != "USTLIVE5" || binary.LittleEndian.Uint32(b[8:]) != 5 || binary.LittleEndian.Uint32(b[12:]) != frameSize {
 		return f, fmt.Errorf("incompatible live snapshot")
 	}
 	u := func(n int) uint32 { return binary.LittleEndian.Uint32(b[n:]) }
@@ -97,14 +106,22 @@ func decodeInto(b []byte, storage []Car) (Frame, error) {
 			return Frame{}, fmt.Errorf("invalid vehicle identity")
 		}
 		seen |= 1 << c.Vehicle
-		c.StintLaps = u(at + 300)
-		if c.StintLaps >= 1000 {
-			c.Known &^= knownStint
+		c.DriveThrough, c.StopGo = b[at+316], b[at+317]
+		c.TimePenaltyMS = u(at + 320)
+		if c.TimePenaltyMS > 3600000 {
+			c.Known &^= knownTimePenalty
+		}
+		c.TyreAgeLaps = u(at + 300)
+		if c.TyreAgeLaps > 255 {
+			c.Known &^= knownTyreAge
 		}
 		c.Laps = u(at + 280)
 		c.GapAhead = int32(u(at + 284))
 		for i := range c.BestSectors {
 			c.BestSectors[i] = u(at + 288 + 4*i)
+		}
+		for i := range c.LastSectors {
+			c.LastSectors[i] = u(at + 304 + 4*i)
 		}
 		if c.Laps >= 1000 {
 			c.Known &^= knownLaps
@@ -122,6 +139,17 @@ func decodeInto(b []byte, storage []Car) (Frame, error) {
 		difference := int64(total) - int64(c.Best)
 		if c.Known&knownBest == 0 || c.Best == 0 || difference < -10 || difference > 10 {
 			c.Known &^= knownSectors
+		}
+		var lastTotal uint64
+		for _, ms := range c.LastSectors {
+			if ms == 0 || ms >= 3600000 {
+				c.Known &^= knownLastSectors
+			}
+			lastTotal += uint64(ms)
+		}
+		lastDifference := int64(lastTotal) - int64(c.Last)
+		if c.Known&knownLast == 0 || c.Last == 0 || lastDifference < -10 || lastDifference > 10 {
+			c.Known &^= knownLastSectors
 		}
 		for i := range c.Wear {
 			c.Wear[i] = math.Float32frombits(u(at + 40 + 4*i))

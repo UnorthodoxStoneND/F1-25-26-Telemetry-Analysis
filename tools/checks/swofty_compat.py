@@ -52,8 +52,6 @@ def compare_game_types(upstream):
         'live.hpp': {
             'GameManagerLive': ('systems_map',),
             'NeRobinHoodMapU64': ('slots','meta'),
-            'SessionSystem': ('entries_begin','entries_end'),
-            'SessionVehicleEntry': ('vehicle_id','grid_position_a','grid_position_b'),
         },
         'car.hpp': {'CarLive': ('f1_tuning','f1_aero','handling_version','suspension')},
     }

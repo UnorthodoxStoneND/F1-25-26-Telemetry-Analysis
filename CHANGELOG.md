@@ -1,9 +1,178 @@
 # F1 Telemetry changelog
 
-## Unreleased
+## 0.6.0 — 2026-11-21
 
-- Keep both helpers' symbols and DWARF debug information uncompressed, and build the Linux helper as PIE for address randomization. These build settings cleared the observed Microsoft/Bkav detections in controlled 0.5.10 helper comparisons without removing telemetry functionality or disabling antivirus protection.
-- Enforce the helper build settings in CI and package validation. The published 0.5.10 archive remains unchanged; a new release must use a new version and receive its own checks and scans.
+- Preserve main’s helper build fixes: uncompressed symbols/DWARF on both platforms and Linux PIE/ASLR, with explicit binary-contract checks.
+- Add an optional standalone retro timing window alongside the existing launcher view. Select one display mode in add-on settings; the window uses the existing helper process and follows session entry/exit.
+- Add sliding position changes with an on/off setting, saved window placement/size, resizable columns, and saved per-profile/per-session-group column visibility and widths. Retain the memory optimisations and full-grid/nearby modes.
+- Show team badges and launcher-supplied tyre icons in every view, including F2 and My Team. Keep header session information and scrollbars only when content overflows.
+- Show best-lap sectors in qualifying and last-lap sectors in races. Add PEN for classification time totals and pending drive-through/stop-go counts; highlight calculated Q1/Q2 and SQ1/SQ2 elimination zones while retaining player-row priority.
+- Use Swofty Live State v6 for grid, wear, completed laps, lap times/sectors and tyre age. Remove replaced private readers, timing hooks/cache and the inferred stint counter. Prefer Live State classification order with the existing supplied-position fallback.
+- Show OUT for observed outlaps in practice/qualifying until lap completion. Keep PIT/DNF/DSQ priority and existing race statuses.
+- Require Swofty 1.10.9+ and the supported F1 25 Steam layouts. Package only runtime files and required documentation/licences; source and tests remain on GitHub.
+
+Known limits: Live State tyre age does not include qualifying-to-race carry-over; Linux/Proton in-game validation remains outstanding; grid penalties and exact elimination cutoffs need upstream exposure. The inactive launcher tab remains visible in window mode, and early Finances hiding depends on an optional exported screen binding. The release promotes user-tested test.26 behaviour; final source/CI and publication steps remain separate.
+
+## 0.6.0-test.26 — 2026-11-20
+
+- Show OUT for observed outlaps in Practice, Qualifying and Sprint Qualifying, in both launcher and retro views. Infer pit exit and lap completion from Live State only; no new game-memory reader.
+- Keep PIT, DNF and DSQ priority and existing Sprint/Race statuses. Reset observations for new sessions, replaced/missing cars, unavailable inputs and rewinds.
+- Retain the Live State v6 migration, tyre age and all previous functionality. Restart Swofty and the game after installing.
+
+## 0.6.0-test.25 — 2026-11-20
+
+- Use Swofty 1.10.9 Live State v6 for starting grid, tyre wear/age, completed laps, last/best lap times and their sectors. Remove the replaced raw readers, timing hooks/cache and inferred stint counter.
+- Replace Stint laps with Tyre age in both race views, including earlier use of the fitted set. Preserve saved column visibility and widths.
+- Require Swofty 1.10.9 or later. Retain session timer/total-lap bindings and remaining setup readers where Live State does not supply the values.
+- Keep all existing retro/launcher features and the separate published 0.5.10 release.
+
+## 0.6.0-test.24 — 2026-11-20
+
+- Fix both telemetry views staying empty when the running core does not export `Vm_Open_Screen`: declare the optional career-rewards hook only when the binding resolves, so the core cannot drop every telemetry mixin because of this missing target.
+- Retain the Finances-screen observer where available. Other builds keep session/flow visibility handling; the window may remain on Finances until a supported exit signal. No private pattern or replacement binding added.
+- Add real-DLL missing-binding regressions for both supported game fixtures. Retain all other fixes/features; restart Swofty and the game after installing.
+
+## 0.6.0-test.23 — 2026-11-20
+
+- Keep the player's blue/accent row highlight when in the qualifying elimination zone, in both retro and launcher views. Other at-risk drivers remain red.
+- Respect Highlight my row: when disabled, the player's row can use elimination red. Retain all earlier fixes/features, including classification order and the Finances transition fix.
+
+## 0.6.0-test.22 — 2026-11-20
+
+- Prefer Live State's supplied classification order when it uniquely covers the displayed racer field. Keep the existing current-position/grid-position/vehicle-ID fallback when unavailable, incomplete or invalid.
+- Preserve safety-car filtering, nearby-driver selection, stable row identities and sliding-animation controls in both display modes. No changes to the separate 0.5.10 development line.
+
+## 0.6.0-test.21 — 2026-11-19
+
+- Hide the retro telemetry window when the career post-weekend rewards container opens, including the Finances page, even while StateSession and the last car snapshot remain live.
+- Keep telemetry available on the post-race standings screen. Only a genuine later track entry can re-arm the window after rewards.
+- Observe the existing screen-open function without changing its arguments, return value or screen behaviour; bound and guard screen-name reads. Preserve session transitions, preferences, penalties and sliding-row controls.
+- Add real-DLL regressions for standings/rewards/child screens, live stale-data ticks, malformed screen pointers and next-track reopening. In-game confirmation of the Finances transition remains required.
+
+## 0.6.0-test.20 — 2026-11-19
+
+- Add a profile-saved Sliding row animation toggle to the add-on settings, enabled by default for the retro window.
+- Apply changes live: switching off settles any active slide and makes subsequent position changes immediate; switching back on restores sliding. Retain all previous functionality and fixes.
+
+## 0.6.0-test.19 — 2026-11-19
+
+- Include Live State's current classification time-penalty total in PEN alongside pending drive-through/stop-go counts, e.g. `5s+DT`. This total is not labelled as an unserved-only balance.
+- Grid penalties awarded in qualifying are intended for PEN until applied to the race grid, but remain unavailable: the released Live State lacks the field and its documented penalty-issue event does not fire. No inferred grid penalties or new memory reader added.
+- Retain prior fixes/features. Restart Swofty/game for the updated private wire v4 native DLL/helper.
+
+## 0.6.0-test.18 — 2026-11-19
+
+- Add PEN before Status in Qualifying/Sprint Qualifying and Sprint/Race, using Live State's outstanding drive-through and stop/go counts. Support multiple penalties, saved visibility/widths and updates when cleared.
+- Omit warnings, grid penalties and classification time totals, which are not verified as an unserved-only balance. No new game reader or recorder; private snapshot size unchanged.
+- Retain all previous fixes and functionality. Restart Swofty and the game after installing the updated native DLL/helper.
+
+## 0.6.0-test.17 — 2026-11-19
+
+- Highlight Q1/Q2 and SQ1/SQ2 drop-zone rows in red. Q3/SQ3 and short/one-shot formats have no elimination highlight.
+- Use the user-selected calculated cutoffs from the full field: Q1/SQ1 eliminates half the excess over ten, rounded down; Q2/SQ2 advances ten. These are not verified game thresholds. Retain player identification and existing retirement styling.
+- Retain all prior fixes and functionality.
+
+## 0.6.0-test.16 — 2026-11-19
+
+- Show S1/S2/S3 from each driver's last completed lap in Sprint/Race. Qualifying/Sprint Qualifying retains best-lap sectors.
+- Carry separate last/best sector triplets from the existing timing records, validate each against its lap total, and refresh visible sector changes. Update the private helper/native wire version; restart the game after installing.
+- Retain all prior fixes and features.
+
+## 0.6.0-test.15 — 2026-11-19
+
+- Add S1/S2/S3 from each driver's best lap after Best lap in Qualifying/Sprint Qualifying, in both launcher and retro views. Columns are visible by default and use existing saved visibility/width controls.
+- Reuse the existing best-lap timing data; unavailable sectors remain dashes. Retain all previous fixes and functionality.
+
+## 0.6.0-test.14 — 2026-11-19
+
+- Use the add-on artwork for the retro window/application icon and embed multiple icon sizes in the Windows helper executable.
+- Generate desktop icons from the existing add-on logo during helper builds. Retain all previous fixes and functionality.
+
+## 0.6.0-test.13 — 2026-11-19
+
+- Hide the retro window on brief career-hub transitions before post-session rewards, even when they complete between telemetry samples. Clear readiness directly from Swofty's flow events; reopen only on a genuine garage/grid/gameplay entry.
+- Retain early session opening, pause support, conditional scrollbars and all previous fixes/features.
+
+## 0.6.0-test.12 — 2026-11-19
+
+- Remove the retro rows' fixed minimum page width, so hidden or narrowed columns do not force a horizontal scrollbar. Scrollbars appear only when content exceeds the available area.
+- Retain the top session header, stint-lap fix and all existing functionality.
+
+## 0.6.0-test.11 — 19 November 2026
+
+- Move the retro window's session type and countdown/lap counter together into the header above the field. Keep live/paused status and version in the footer without duplicating session information.
+- Preserve the per-view counter visibility choice and all test.10 fixes and earlier features, including Flashback stint baselines, saved column widths, placement and sliding rows.
+
+## 0.6.0-test.10 — 19 November 2026
+
+- Fix stint laps disappearing for part of the field after Flashback crosses a lap boundary. Retain a known first-stint origin, or a later baseline strictly before the rewound lap, when the physical compound matches. The count decreases with completed laps instead of remaining blank until another tyre change.
+- Keep ambiguous rewinds onto/before a later tyre-change lap, compound mismatches and replacement identities unknown. No recorder, history buffer, new game reader or data file is added.
+- Reproduce the split-field rewind in the native counter and actual DLL publisher tests. Keep saved column widths, early window opening, placement, sliding rows, F2 images and all prior functionality.
+
+## 0.6.0-test.9 — 19 November 2026
+
+- Open the retro window at the earlier grid/pre-race or garage transition instead of waiting for lights out. The recorded race flow reaches `GridRundownType` and `PreRace` before `BeginGameplay`; practice/qualifying can use `ZoomToMonitorCutscene`.
+- Retain the window-only readiness latch, selection-screen exclusion, pause/session cleanup and all earlier features, including saved column widths, placement, sliding rows and F2 images. No new memory reader or acquisition change.
+- Test the actual DLL with the recorded race transition order and garage entry, confirming window readiness before the start-light and gameplay events. User in-game retesting remains required.
+
+## 0.6.0-test.8 — 19 November 2026
+
+- Prevent the retro window opening solely because a session-start event and fresh car data exist behind the between-session selection screen. Require Swofty's actual `BeginGameplay` or `InGame` flow node before opening; remember the transient begin signal through garage, grid and paused updates.
+- Clear window readiness on session end, unload, blocked career/loading states and fresh session starts. Keep acquisition and the in-launcher display unchanged; no new memory reader is added.
+- Add actual-DLL regressions for readable pre-session grids, intro/class-name exclusion, transient node entry, pause retention, hub return and session restart. Retain saved column widths, placement, sliding rows, F2 images and all earlier features. In-game user retesting remains required.
+
+## 0.6.0-test.7 — 19 November 2026
+
+- Resize retro-window columns by dragging the right edge of a heading, with a live preview. Double-click a divider to restore automatic sizing; Reset defaults restores the current view's columns and widths.
+- Save widths separately for Practice, Qualifying/Sprint Qualifying and Sprint/Race in each profile's existing persistent column preferences. Hidden columns retain their widths, and add-on updates retain the preferences.
+- Keep text within narrowed cells, restoring full values when widened. Wide layouts scroll horizontally. Retain live values, team/tyre images, sliding rows, remembered window placement and the retained-canvas memory improvements.
+- The launcher's built-in table resizing remains unchanged; its add-on API does not report width changes for persistence.
+
+## 0.6.0-test.6 — 19 November 2026
+
+- Fix Windows initially showing the retro window on the default/game monitor before moving it to the launcher's monitor. Apply the selected coordinates during native window creation, before first visibility, including when restoring saved bounds.
+- Use a temporary current-thread creation callback limited to the retro window's exact title, removed as soon as the initial show finishes. No game window or other application is moved. Existing saved layout remains authoritative and is not reset.
+- Reproduce and verify startup on an inactive private Windows desktop with a test launcher on the second monitor. Add hidden-window regressions for pre-visibility coordinates, unrelated-window exclusion and callback cleanup. Retain F2 images, memory improvements, sliding rows and all prior controls.
+- Linux/X11 retains window-manager placement after mapping; native Wayland restrictions are unchanged.
+
+## 0.6.0-test.5 — 19 November 2026
+
+- Place the retro window on the launcher's monitor on first use, using the launcher's process window rather than the game or cursor. Restore the last position, size and maximized state on later openings and helper restarts.
+- Store version-1 `retro-window.json` in the persistent launcher-provided add-on data directory, outside the installed/versioned package. Add-on updates retain this layout. Save settled changes and flush on hide, close and helper shutdown; ignore minimized geometry.
+- Fit restored bounds to connected monitor work areas so monitor removal or desktop/taskbar changes cannot leave the window inaccessible. Fall back to a centred window on the launcher's monitor when no usable preference exists.
+- Use Windows native placement APIs and Linux/X11 monitor/window properties. Native Wayland does not expose the same global placement controls; compositor policy still applies, and a Wayland-only launcher may not be discoverable from X11.
+- Add monitor-selection, negative-coordinate, persistence, corrupt-data, save-failure, debounce/maximize and native isolated-X11 round-trip tests. Retain the F2 image fix, sliding rows, memory optimizations and all session/display controls.
+
+## 0.6.0-test.4 — 19 November 2026
+
+- Fix missing F2 team badges and tyre images caused by an F1-only compound allowlist in native acquisition and the shared image display gate. The active game log confirmed Swofty supplied both F2 images successfully.
+- Treat launcher-provided compounds as GameDB stat IDs. Accept all non-sentinel byte IDs instead of limiting them to F1 slick/intermediate/wet codes; retain availability and unknown-sentinel checks.
+- Display valid, identity-matched service images independently of optional tyre-number and position readings. Missing tyre data no longer hides a team badge; missing classification does not hide a verified driver's images. Keep synchronized snapshots and avoid inventing a tyre sorting value when its compound is unknown.
+- Add native 22-car/all-ID coverage, actual publisher/stint regressions and shared launcher/retro tests across Practice, Qualifying/Sprint Qualifying, race formats and Time Trial. Retain memory optimizations, sliding rows, saved options and safety-car filtering. Full in-game coverage of every mode/class is not implied by these synthetic tests.
+
+## 0.6.0-test.3 — 19 November 2026
+
+- Slide existing driver rows into their new positions over a 250 ms eased transition in the standalone retro window. Positions and timing values keep updating during the movement; new position changes retarget smoothly from the displayed positions.
+- Use one animation for the moving field, retaining the existing row, text, image and control objects. Preserve test.2's memory optimizations, unchanged acquisition rate, three session views, saved columns, setups, highlighting/fading and launcher/window selection. The launcher table is unchanged.
+- Cancel and settle transitions on hide, session/layout changes or resize. Initial/new-session rows appear directly in their slots; no queued obsolete movement or per-row timer is retained.
+- Test interpolation, mid-slide live values and retargeting, stale callback rejection, multi-position changes, 2,000 rapid reorders, lifecycle/resize cancellation and bounded tracking. Live-update benchmarks remain at about 4 KB per refresh; the software-driver animation callback benchmark allocates no additional Go memory per frame. These figures do not measure graphics-driver memory or real-game frame time.
+
+## 0.6.0-test.2 — 19 November 2026
+
+- Retain the retro window's canvas tree between telemetry updates. Update changed text, colours and images in place; reuse row and image objects, and reorder existing rows when positions change.
+- Preserve the scroll container and offset during normal updates and position changes. Rebuild structural layouts only for session/column/panel changes. Refresh font sizes only when they change, and drop departed cars and unused image resources from the live caches.
+- Keep all three session views, fields, team/tyre images, player highlighting, retirement fading, Columns/reset controls, saved preferences, setups, display selection and automatic window lifecycle. Acquisition frequency is unchanged.
+- In a synthetic 24-car race benchmark with images, per-refresh allocations dropped from about 2.79 MB to 3.96 KB. This measures Go allocations rather than Task Manager working set; real-game memory use still needs user comparison.
+- Add 2,000-update object-reuse regressions, position/image/highlight transitions and retained control/layout tests. Package both Windows and Linux helpers; preserve 0.5.10-test.4 and all existing Releases.
+
+## 0.6.0-test.1 — 19 November 2026
+
+- Add a standalone retro timing window inside the existing telemetry helper process, built with Fyne for Windows and Linux. Use the saved reference's black background, monospaced rows, yellow headings and driver names, green wear/status values, purple session-best time and optional blue player highlight.
+- Add the Telemetry display setting: Launcher page or Retro window. The unselected display shows no telemetry. The inactive launcher tab temporarily remains because Swofty 1.9.80 has no conditional section API.
+- Reuse all current fields in the three session views, including team badges, fitted tyre images, timed-session setups, race stint laps and per-profile/per-group column choices. The window's Columns panel previews and saves immediately.
+- Poll independently of the selected launcher tab, require advancing samples before opening, retain the window while paused, and hide it when the session exits, the hub returns or the publisher stops. Closing the window manually keeps it hidden for that session; switching display mode or entering another session can reopen it. Updates do not repeatedly show/focus the window.
+- Preserve the complete 0.5.10-test.4 source snapshot and test ZIP separately for continued Linux testing and its planned release. All of that version's fixes/additions remain included here. No release publication or Git operations are performed.
+- Add background lifecycle, display exclusion, field parity, preference persistence and rendered-session checks. In-game window lifecycle and full Linux/Proton validation remain required.
 
 ## 0.5.10 — 19 November 2026
 

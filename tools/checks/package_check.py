@@ -15,6 +15,31 @@ ROOT=Path(__file__).resolve().parents[2]
 EMAIL=re.compile(r'[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}')
 PERSONAL_PATH=re.compile(r'[A-Za-z]:[\\/]Users[\\/][^\\/\s]+',re.IGNORECASE)
 
+# Audited upstream licence text can contain public copyright contacts. Require
+# its exact content hash; a new contact or edited notice is still rejected.
+PUBLIC_LICENSE_HASHES={
+    'DESKTOP_LICENSES.txt':'3ab49dfd065059ec7a9c9cefccd6d8310578698b46376fd2c1612e16e7d3d7ad',
+    'DESKTOP-TOOLCHAIN-LICENSES.txt':'cae9f847a4b50291ae0fa19f00a6fb1152bd9e6cd663c4ef88d7cb6aec97a172',
+}
+
+def public_desktop_assets(raw):
+    # Noto font outlines happen to contain email-shaped binary bytes. Mask only
+    # whole, hash-verified upstream TTF assets, never arbitrary matching text.
+    fonts=[
+        ('00010000001201000004002047444546fefbf2ab0000012c000005f247504f53',470472,'35600501daadd3e9030ee6ed8098fd3c7f31bfd898ca58da8edf793a3231c48b'),
+        ('00010000001201000004002047444546f0d7dde70000012c000005c047504f53',455188,'6b04c8dd65af6b73eb4279472ed1580b29102d6496a377340e80a40cdb3b22c9'),
+    ]
+    for prefix,size,digest in fonts:
+        start=0;prefix=bytes.fromhex(prefix)
+        while (at:=raw.find(prefix,start))>=0:
+            start=at+len(prefix)
+            if hashlib.sha256(raw[at:at+size]).hexdigest()==digest:
+                raw=raw[:at]+b'\0'*size+raw[at+size:]
+    # BurntSushi/toml 1.4.0 embeds this public Windows-path help example.
+    # Keep the entire surrounding sentence exact, including both examples.
+    example=bytes.fromhex('496620796f7527726520747279696e6720746f2061646420612057696e646f777320706174682028652e672e2022433a5c55736572735c6d617274696e2229207468656e207573696e6720272f270a696e7374656164206f6620275c272077696c6c20757375616c6c7920616c736f20776f726b3a2022433a2f55736572732f6d617274696e222e0a')
+    return raw.replace(example,b'\0'*len(example))
+
 def privacy_pe_debug(raw):
     """Scan real DWARF text instead of incidental matches in its compressed bytes."""
     try:
@@ -88,8 +113,8 @@ def privacy_scan_bytes(raw):
     This changes the temporary scan buffer, never the artwork or its provenance.
     All other certificate fields, image chunks and ordinary files remain scanned.
     """
-    if raw.startswith(b'MZ'):return privacy_pe_debug(raw)
-    if raw.startswith(b'\x7fELF'):return privacy_elf_debug(raw)
+    if raw.startswith(b'MZ'):return privacy_pe_debug(public_desktop_assets(raw))
+    if raw.startswith(b'\x7fELF'):return privacy_elf_debug(public_desktop_assets(raw))
     if not raw.startswith(b'\x89PNG\r\n\x1a\n'):
         return raw
     contact='@'.join(('ca','trufo.ai')).encode('ascii')
@@ -111,15 +136,16 @@ def privacy_scan_bytes(raw):
     return bytes(scanned)
 
 def privacy(name,raw):
+    public_notice=PUBLIC_LICENSE_HASHES.get(PurePosixPath(name).name)==hashlib.sha256(raw).hexdigest()
     raw=privacy_scan_bytes(raw)
     for encoding in ('utf-8','utf-16-le'):
         text=raw.decode(encoding,errors='replace')
-        assert not EMAIL.search(text) and not PERSONAL_PATH.search(text), f'Email or personal path in {name}'
+        assert (public_notice or not EMAIL.search(text)) and not PERSONAL_PATH.search(text), f'Email or personal path in {name}'
 def sources():
     # Also supports an isolated, non-Git build directory.
-    result=subprocess.run(['git','-C',str(ROOT),'ls-files','-z'],capture_output=True)
+    result=subprocess.run(['git','-C',str(ROOT),'ls-files','--cached','--others','--exclude-standard','-z'],capture_output=True)
     if result.returncode==0:
-        return [ROOT/name for name in result.stdout.decode().split('\0') if name]
+        return [ROOT/name for name in result.stdout.decode().split('\0') if name and (ROOT/name).is_file()]
     return [p for p in ROOT.rglob('*') if p.is_file() and not any(part.startswith('.') or part in ('bin','dist','__pycache__') for part in p.relative_to(ROOT).parts)]
 def main():
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('--archive',type=Path);p.add_argument('--check',choices=('all','integrity','privacy'),default='all');args=p.parse_args()
@@ -138,7 +164,7 @@ def main():
             assert archive.name in (ROOT/'README.md').read_text(encoding='utf-8')
             assert manifest['launcher']['sections']==[{'id':'telemetry','title':'Live Telemetry','icon':'activity'}]
             assert manifest['operations']['native']==[{'dll':'bin/telemetry-live.dll'}]
-            assert manifest['compat']['launcher']=='>=1.9.80'
+            assert manifest['compat']['launcher']=='>=1.10.9'
             assert manifest['launcher']['program']['windows']=='bin/telemetry-live.exe'
             assert manifest['launcher']['program']['linux']=='bin/telemetry-live-linux'
             assert z.getinfo('bin/telemetry-live-linux').external_attr>>16&0o111
@@ -156,7 +182,7 @@ def main():
             assert b'BSD-3-Clause' in z.read('THIRD_PARTY_NOTICES.md')
             assert b'Apache-2.0 WITH LLVM-exception' in z.read('THIRD_PARTY_NOTICES.md')
             assert b'MIT License' in z.read('native/SDK-LICENSE.txt')
-            expected={'swofty.json','README.md','CHANGELOG.md','LICENSE','THIRD_PARTY_NOTICES.md','source/go.mod','bin/telemetry-live.exe','bin/telemetry-live.dll','bin/telemetry-live-linux','native/SDK-LICENSE.txt','native/swofty_api.h'}
+            expected={'swofty.json','README.md','CHANGELOG.md','LICENSE','THIRD_PARTY_NOTICES.md','DESKTOP_LICENSES.txt','bin/telemetry-live.exe','bin/telemetry-live.dll','bin/telemetry-live-linux','native/SDK-LICENSE.txt','native/DESKTOP-TOOLCHAIN-LICENSES.txt'}
             assert manifest['icon'] == 'icon.png'
             assert manifest['compat']['platforms'] == ['steam']
             assert manifest['description'].strip() and manifest['category'] == 'utility'
@@ -168,10 +194,10 @@ def main():
             assert 0 < len(artwork) <= 2_000_000 and artwork[:8] == b'\x89PNG\r\n\x1a\n'
             width,height=struct.unpack('>II',artwork[16:24])
             assert width > 0 and width == height, 'Browser icon must be a non-empty square'
-            names=z.namelist();assert z.testzip() is None and len(names)==len(set(names)) and expected<=set(names)
+            names=z.namelist();assert z.testzip() is None and len(names)==len(set(names)) and expected==set(names),'Only runtime files and required documentation may be shipped'
             for name in names:
                 path=PurePosixPath(name);assert not path.is_absolute() and '..' not in path.parts and '\\' not in name
-                assert name in expected or path.parent==PurePosixPath('source') and path.suffix in {'.go','.py'} or path.parent==PurePosixPath('native') and path.suffix in {'.h','.hpp','.cpp','.py'}
+                assert name in expected
                 assert z.read(name)==(ROOT/name).read_bytes(),f'Stale ZIP member: {name}'
             assert json.loads(z.read('swofty.json'))==manifest
         if args.check in ('all','privacy'):

@@ -9,13 +9,13 @@ Before building, update the version in `swofty.json` and `source/main.go`, the c
 - A non-empty description, category `utility`, and the public source `repository` URL in `swofty.json`.
 - `icon` naming the included PNG/JPG/WebP artwork (not SVG), no larger than 2 MB. The current square artwork is `icon.png`.
 - `compat.platforms: ["steam"]`, reflecting the game platform tested. Keep the launcher compatibility requirement and core dependency.
-- The compiled helper and native DLL, first-party source, build scripts, README, MIT licence and applicable third-party notices.
+- The compiled Windows/Linux helpers and native DLL, README, changelog, MIT licence and required third-party notices. Source, build scripts, SDK headers and tests remain in the public repository and GitHub release source archive, outside the installable ZIP.
 
 The packaging script includes the manifest's icon. The existing package-integrity check verifies the icon, metadata and archive contents, so missing browser requirements fail the same CI job used for GitHub packaging. No extra parallel CI job is needed.
 
 ## Build and validate
 
-Follow the [development guide](development.md) to build and test. Keep Go 1.27.4, console subsystem, retained symbols, uncompressed helper debug information, Linux PIE/ASLR and the native /MD runtime setting. Then run:
+Follow the [development guide](development.md) to build and test. Use Go 1.24+ (CI pins 1.27.4), console subsystem, retained symbols/uncompressed debug information, Linux PIE/ASLR and the native /MD runtime setting. Then run:
 
 ```powershell
 python source/package.py
@@ -26,7 +26,7 @@ For release versions, build and validate the resulting `dist/F1_Telemetry_v<vers
 
 ## GitHub
 
-Create a branch, commit the source and icon, push it and open a PR against main. Wait for all sixteen individually required add-on/Swofty checks, then merge. Create the version tag from the merged main commit and attach the exact final ZIP and its `SHA256SUMS.txt` to the GitHub release. The release notes should identify the tested version and any outstanding validation.
+Create a branch, commit the source and icon, push it and open a PR against main. Wait for all required add-on/Swofty checks, then merge. Create the version tag from the merged main commit and attach the exact final ZIP and its `SHA256SUMS.txt` to the GitHub release. The release notes should identify the tested version and any outstanding validation.
 
 Team badges in this add-on use the supported Swofty image API. Do not bundle separate experimental launcher builds or extracted game assets.
 

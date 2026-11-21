@@ -1,5 +1,7 @@
 # GitHub validation checks
 
+For 0.6.0, a Linux desktop build job compiles both GUI-enabled helpers with CGO and the `desktop` tag, and runs rendered-view/background lifecycle tests. The Windows artifact job downloads these helpers rather than replacing them with headless builds. Protocol tests remain available without a desktop display; the desktop renderer and owner-loop handoff are additionally tested on Linux, including a synthetic background startup with no launcher view request. The package includes dependency notices and module hashes.
+
 The single CI workflow lists each validation separately. Main
 is protected by the ten add-on checks and six upstream compatibility checks.
 Build shared test artifacts and Prepare Swofty validation tools are setup jobs;
@@ -50,4 +52,4 @@ The package-integrity check also verifies the bundled browser icon, its size/sha
 
 The additional **Linux helper and shared transport** job runs portable and Linux IPC/host-call tests plus vet on Ubuntu. The shared Windows build also cross-compiles the native Linux helper into the package. Native reader checks exercise the temporary file-mapping lifecycle; image fixtures cover both team badges and fitted tyre icons. These checks do not launch F1 25 under Proton.
 
-Stint-counter regressions run with the native reader checks. They cover initial counts, same/different compounds, drive-throughs, invalid readings, rewinds and lifecycle resets; the real publisher test confirms counts reach the committed snapshot. Portable UI tests cover column placement, zero/unknown values, hidden-field refresh and saved-key compatibility.
+Live State v6 regressions cover actual tyre-set age versus current-stint length, zero/unavailable/malformed data, coherent snapshot generations and per-car grid/wear/completed-lap/timing/sector routing. The actual publisher and helper ABI tests verify the replaced readers are unnecessary. Saved column visibility/widths migrate from the former stint key.

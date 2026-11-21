@@ -21,6 +21,7 @@ static_assert(std::is_same_v<decltype(SwoftyCareer::flow_status),int(*)(uint32_t
 static_assert(std::is_same_v<decltype(SwoftyLive::available),int(*)()>);
 static_assert(std::is_same_v<decltype(SwoftyLive::session),int(*)(SwoftyLiveSession*)>);
 static_assert(std::is_same_v<decltype(SwoftyLive::car),int(*)(uint32_t,SwoftyLiveCar*)>);
+static_assert(std::is_same_v<decltype(SwoftyLive::car_detail),int(*)(uint32_t,SwoftyLiveCarDetail*)>);
 static_assert(std::is_same_v<decltype(SwoftyLive::seq),int(*)(uint64_t*)>);
 static_assert(std::is_same_v<decltype(SwoftyLive::driver_name),int(*)(uint32_t,char*,uint32_t)>);
 static_assert(std::is_same_v<decltype(SwoftyLive::team_badge_texture),int(*)(uint32_t,char*,uint32_t)>);
@@ -50,6 +51,12 @@ int main() {
     FIELD(SwoftyMem,version);FIELD(SwoftyMem,readable);
     FIELD(SwoftyLive,version);FIELD(SwoftyLive,available);FIELD(SwoftyLive,session);FIELD(SwoftyLive,car);FIELD(SwoftyLive,seq);
     FIELD(SwoftyLive,driver_name);
+    FIELD(SwoftyLive,car_detail);
+    FIELD(SwoftyLiveCarDetail,version);FIELD(SwoftyLiveCarDetail,size);FIELD(SwoftyLiveCarDetail,vehicle);FIELD(SwoftyLiveCarDetail,have);
+    FIELD(SwoftyLiveCarDetail,grid_position);FIELD(SwoftyLiveCarDetail,tyre_age_laps);FIELD(SwoftyLiveCarDetail,tyre_wear);
+    FIELD(SwoftyLiveCarDetail,laps_completed);FIELD(SwoftyLiveCarDetail,last_lap_ms);FIELD(SwoftyLiveCarDetail,last_sector_ms);
+    FIELD(SwoftyLiveCarDetail,best_lap_ms);FIELD(SwoftyLiveCarDetail,best_sector_ms);
+    VALUE(SWOFTY_LIVE_HAVE_GRID);VALUE(SWOFTY_LIVE_HAVE_TYRE_AGE);VALUE(SWOFTY_LIVE_HAVE_TYRE_WEAR);VALUE(SWOFTY_LIVE_HAVE_LAP_TIMES);
     FIELD(SwoftyLive,team_badge_texture);FIELD(SwoftyLive,images);FIELD(SwoftyLive,tyre_icon_texture);
     FIELD(SwoftyLiveImages,version);FIELD(SwoftyLiveImages,start);FIELD(SwoftyLiveImages,image);
     FIELD(SwoftyCarOps,version);FIELD(SwoftyCarOps,available);FIELD(SwoftyCarOps,count);FIELD(SwoftyCarOps,car);FIELD(SwoftyCarOps,get);

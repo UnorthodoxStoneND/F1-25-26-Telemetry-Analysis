@@ -5,7 +5,7 @@
 #include <cstdio>
 
 namespace directlive {
-struct Sites { uint64_t manager=0,results=0; };
+struct Sites { uint64_t manager=0; };
 struct Entry {uint64_t key,value;};
 struct Registry {
  Entry entries[4096]{};uint8_t occupied[4096]{};size_t count=0;
@@ -28,25 +28,6 @@ struct Registry {
 };
 struct Context {
  Registry registry;
- template<class R> void grid(R& r,const Sites& s,livewire::Frame& frame)const {
-  using namespace swofty::game;
-  uint64_t end=0;
-  auto system=registry.find(s.results);
-  auto list=readers::pointer(r,system+offsetof(SessionSystem,entries_begin));
-  if(!list||!readers::read(r,system+offsetof(SessionSystem,entries_end),end)||
-     end<list||(end-list)%8||(end-list)/8>64) return;
-  auto count=(end-list)/8;
-  for(unsigned n=0;n<frame.count;n++) {
-   auto& c=frame.cars[n];
-   if(c.vehicle>=count) continue;
-   auto record=readers::pointer(r,list+c.vehicle*8);uint8_t vehicle=255;uint32_t a=0,b=0;
-   if(readers::read(r,record+offsetof(SessionVehicleEntry,vehicle_id),vehicle)&&vehicle==c.vehicle&&
-      readers::read(r,record+offsetof(SessionVehicleEntry,grid_position_a),a)&&
-      readers::read(r,record+offsetof(SessionVehicleEntry,grid_position_b),b)&&(a^b)<count&&(a^b)<32) {
-    c.grid=int32_t((a^b)+1);c.known|=livewire::GRID;
-   }
-  }
- }
  template<class R> bool fill(R& r,const Sites& s,livewire::Frame& frame,const SwoftyLive* api,const SwoftyCarOps* ops) {
   frame={};frame.player=-1;
   if(!liveapi::car_ops_available(ops)) {
@@ -73,12 +54,10 @@ struct Context {
    if(ops->car(id,&handle,&is_ai)!=SWOFTY_ASSET_OK||!handle) continue;
    auto& c=frame.cars[frame.count++];c.vehicle=id;c.identity=reinterpret_cast<uint64_t>(handle);
    snapshot.apply(id,c,count);
-   readers::wear(r,c.identity,c);readers::setup(r,c.identity,c);
+   readers::setup(r,c.identity,c);
    liveapi::setup(ops,id,c.identity,c);
    if(c.known&livewire::POSITION) {uint64_t bit=1ull<<c.position;duplicate_positions|=(positions&bit)!=0;positions|=bit;}
   }
-  // Exported starting-grid fields support race position changes and fallback ordering.
-  grid(r,s,frame);
   for(unsigned i=0;i<frame.count;i++) {
    auto& c=frame.cars[i];
    if(c.known&livewire::GRID) {uint64_t bit=1ull<<c.grid;duplicate_grids|=(grids&bit)!=0;grids|=bit;}
@@ -87,6 +66,7 @@ struct Context {
    if(duplicate_positions) frame.cars[i].known&=~livewire::POSITION;
    if(duplicate_grids) frame.cars[i].known&=~livewire::GRID;
   }
+  snapshot.classification(frame,count);
   if(frame.count) frame.state|=livewire::ACTIVE;
   else std::snprintf(frame.diagnostic,sizeof frame.diagnostic,"Swofty's car handles are unavailable.");
   return frame.count>0;

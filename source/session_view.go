@@ -1,6 +1,9 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 type sessionLayout uint8
 
@@ -49,7 +52,7 @@ func makeColumns(layout sessionLayout) []M {
 	}
 	c = append(c, M{"key": "team", "title": "", "width": 38}, M{"key": "driver", "title": "Driver"}, M{"key": "tyre", "title": "Tyre", "width": 68})
 	if layout == layoutRace {
-		c = append(c, M{"key": "stint", "title": "Stint laps", "width": 68}, M{"key": "gap", "title": "Gap ahead"}, M{"key": "last", "title": "Last lap"}, M{"key": "best", "title": "Best lap"})
+		c = append(c, M{"key": "tyre_age", "title": "Tyre age", "width": 68}, M{"key": "gap", "title": "Gap ahead"}, M{"key": "last", "title": "Last lap"}, M{"key": "best", "title": "Best lap"})
 		for _, key := range []string{"S1", "S2", "S3", "FL", "FR", "RL", "RR", "Avg"} {
 			title := key
 			if key != "S1" && key != "S2" && key != "S3" {
@@ -63,6 +66,14 @@ func makeColumns(layout sessionLayout) []M {
 			c = append(c, M{"key": "gap", "title": "Gap to best"})
 		}
 		c = append(c, M{"key": "last", "title": "Last lap"}, M{"key": "best", "title": "Best lap"})
+		if layout == layoutQualifying {
+			for _, key := range []string{"S1", "S2", "S3"} {
+				c = append(c, M{"key": key, "title": key})
+			}
+		}
+	}
+	if layout != layoutPractice {
+		c = append(c, M{"key": "pen", "title": "PEN", "width": 80})
 	}
 	c = append(c, M{"key": "status", "title": "Status", "width": 76})
 	if layout != layoutRace {
@@ -90,6 +101,9 @@ func statusCell(c Car) any {
 	if c.Known&knownResult != 0 {
 		switch (c.Flags & resultMask) >> 8 {
 		case 2:
+			if c.Flags&outLap != 0 {
+				return textValue{Text: "Out", Tone: "warn"}
+			}
 			return textValue{Text: "Run", Tone: "good"}
 		case 3:
 			return textValue{Text: "Finished", Tone: "neutral"}
@@ -120,11 +134,15 @@ func gapCell(ms uint32, known bool, leader bool) any {
 	}
 	return M{"text": fmt.Sprintf("+%d.%03d", ms/1000, ms%1000), "sort": ms}
 }
-func sectorCell(c Car, index int) any {
-	if c.Known&knownSectors == 0 {
+func sectorCell(c Car, index int, layout sessionLayout) any {
+	known, sectors := uint32(knownSectors), c.BestSectors
+	if layout == layoutRace {
+		known, sectors = knownLastSectors, c.LastSectors
+	}
+	if c.Known&known == 0 {
 		return "—"
 	}
-	ms := c.BestSectors[index]
+	ms := sectors[index]
 	if ms == 0 {
 		return "—"
 	}
@@ -145,16 +163,16 @@ func driverCells(c Car, layout sessionLayout, best uint32, open bool) []any {
 	}
 	cells = append(cells, badgeCell(c), driverName(c), tyreCell(c))
 	if layout == layoutRace {
-		var stint any = "—"
-		if c.Known&knownStint != 0 {
-			stint = M{"text": fmt.Sprint(c.StintLaps), "sort": c.StintLaps}
+		var age any = "—"
+		if c.Known&knownTyreAge != 0 {
+			age = M{"text": fmt.Sprint(c.TyreAgeLaps), "sort": c.TyreAgeLaps}
 		}
-		cells = append(cells, stint)
+		cells = append(cells, age)
 		known := c.Known&knownGapAhead != 0 && c.GapAhead >= 0 && retirementLabel(c) == ""
 		cells = append(cells, gapCell(uint32(c.GapAhead), known, c.Known&knownPosition != 0 && c.Position == 1),
 			lapTime(c.Last, c.Known&knownLast != 0), lapTime(c.Best, c.Known&knownBest != 0))
 		for sector := 0; sector < 3; sector++ {
-			cells = append(cells, sectorCell(c, sector))
+			cells = append(cells, sectorCell(c, sector, layout))
 		}
 		for _, wheel := range []int{2, 3, 0, 1} {
 			cells = append(cells, wearCell(c.Wear[wheel], c.WearKnown&(1<<wheel) != 0))
@@ -172,10 +190,47 @@ func driverCells(c Car, layout sessionLayout, best uint32, open bool) []any {
 			cells = append(cells, gapCell(c.Best-best, known, c.Best == best))
 		}
 		cells = append(cells, lapTime(c.Last, c.Known&knownLast != 0), lapTime(c.Best, c.Known&knownBest != 0))
+		if layout == layoutQualifying {
+			for sector := 0; sector < 3; sector++ {
+				cells = append(cells, sectorCell(c, sector, layout))
+			}
+		}
+	}
+	if layout != layoutPractice {
+		cells = append(cells, penaltyCell(c))
+	}
+	if layout == layoutRace {
+		c.Flags &^= outLap
 	}
 	cells = append(cells, statusCell(c))
 	if layout != layoutRace {
 		cells = append(cells, toggleValue{Edit: toggleEdit{Toggle: toggleField{Value: open}}})
 	}
 	return cells
+}
+
+// DT/SG are pending counts. Seconds are the current classification total,
+// explicitly requested by the user even though not an unserved-only balance.
+func penaltyCell(c Car) any {
+	parts := []string{}
+	if c.Known&knownTimePenalty != 0 && c.TimePenaltyMS > 0 {
+		time := fmt.Sprintf("%d.%03d", c.TimePenaltyMS/1000, c.TimePenaltyMS%1000)
+		parts = append(parts, strings.TrimRight(strings.TrimRight(time, "0"), ".")+"s")
+	}
+	if c.Known&knownPenalties != 0 {
+		for _, p := range []struct {
+			count uint8
+			label string
+		}{{c.DriveThrough, "DT"}, {c.StopGo, "SG"}} {
+			if p.count == 1 {
+				parts = append(parts, p.label)
+			} else if p.count > 1 {
+				parts = append(parts, fmt.Sprintf("%d%s", p.count, p.label))
+			}
+		}
+	}
+	if len(parts) == 0 {
+		return "—"
+	}
+	return textValue{Text: strings.Join(parts, "+"), Tone: "warn"}
 }

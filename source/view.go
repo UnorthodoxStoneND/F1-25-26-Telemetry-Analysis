@@ -47,7 +47,9 @@ func visible(f Frame, mode string) []Car {
 }
 func visibleInto(f Frame, mode string, storage []Car) []Car {
 	cars := append(storage, f.Cars...)
-	slices.SortStableFunc(cars, func(a, b Car) int { return cmp.Compare(position(a), position(b)) })
+	if f.State&classificationOrder == 0 {
+		slices.SortStableFunc(cars, func(a, b Car) int { return cmp.Compare(position(a), position(b)) })
+	}
 	if mode == "full" || len(cars) <= 5 {
 		return cars
 	}
@@ -80,10 +82,12 @@ type viewState struct {
 	Hidden                             uint32
 	Disabled, ColumnsOpen              bool
 	SessionBest                        uint32
+	EliminationRisk                    uint32
 	Session                            uint64
 	SessionLabel                       string
 	Player                             int32
 	Status, Diagnostic, Mode, Expanded string
+	DisplayMode                        string
 	Highlight, Active                  bool
 	Count                              int
 	Cars                               [maxCars]Car
@@ -91,7 +95,7 @@ type viewState struct {
 
 func (a *App) viewState() viewState {
 	layout := layoutFor(a.frame)
-	state := viewState{Layout: layout, Hidden: a.hidden[layout], Disabled: a.disabled[layout], ColumnsOpen: a.columnsOpen, Session: a.frame.Session, Player: a.frame.Player,
+	state := viewState{DisplayMode: a.displayMode, Layout: layout, Hidden: a.hidden[layout], Disabled: a.disabled[layout], ColumnsOpen: a.columnsOpen, Session: a.frame.Session, Player: a.frame.Player,
 		SessionLabel: a.pageSubtitle(),
 		Status:       a.status, Diagnostic: a.frame.Diagnostic, Mode: a.mode,
 		Expanded: a.expanded, Highlight: a.highlight, Active: a.frame.State&active != 0}
@@ -107,8 +111,14 @@ func (a *App) viewState() viewState {
 	}
 	var storage [maxCars]Car
 	for n, c := range visibleInto(a.frame, a.mode, storage[:0]) {
-		c.Flags &= inPitLane | resultMask
-		c.Known &= knownName | knownPosition | knownGrid | knownTyre | knownLast | knownBest | knownPit | knownResult | knownLaps | knownGapAhead | knownSectors | knownStint
+		if qualifyingAtRisk(a.frame, c) {
+			state.EliminationRisk |= 1 << c.Vehicle
+		}
+		c.Flags &= inPitLane | outLap | resultMask
+		if layout == layoutRace || a.frame.SessionType < 1 || a.frame.SessionType > 14 {
+			c.Flags &^= outLap
+		}
+		c.Known &= knownName | knownPosition | knownGrid | knownTyre | knownLast | knownBest | knownPit | knownResult | knownLaps | knownGapAhead | knownSectors | knownLastSectors | knownTyreAge | knownPenalties | knownTimePenalty
 		if !badgeRowReady(c) {
 			c.BadgePNG = ""
 			c.TyrePNG = ""
@@ -118,6 +128,15 @@ func (a *App) viewState() viewState {
 		}
 		if !a.fieldVisible(layout, "tyre") {
 			c.TyrePNG = ""
+		}
+		if layout == layoutPractice || !a.fieldVisible(layout, "pen") {
+			c.Known &^= knownPenalties | knownTimePenalty
+		}
+		if c.Known&knownTimePenalty == 0 {
+			c.TimePenaltyMS = 0
+		}
+		if c.Known&knownPenalties == 0 {
+			c.DriveThrough, c.StopGo = 0, 0
 		}
 		if c.Known&knownResult == 0 {
 			c.Flags &^= resultMask
@@ -147,15 +166,20 @@ func (a *App) viewState() viewState {
 		if layout != layoutRace {
 			c.WearKnown = 0
 			c.Wear = [4]float32{}
-			c.Known &^= knownGapAhead | knownSectors
+			c.Known &^= knownGapAhead | knownLastSectors
+			c.LastSectors = [3]uint32{}
+			if layout == layoutPractice {
+				c.Known &^= knownSectors
+				c.BestSectors = [3]uint32{}
+			}
 			c.GapAhead = 0
-			c.BestSectors = [3]uint32{}
 			if c.Known&knownPosition != 0 {
 				c.Known &^= knownGrid
 				c.Grid = 0
 			}
 		} else {
-			c.Known &^= knownLaps
+			c.Known &^= knownLaps | knownSectors
+			c.BestSectors = [3]uint32{}
 			c.Laps = 0
 		}
 		if c.Known&knownLaps == 0 {
@@ -165,14 +189,17 @@ func (a *App) viewState() viewState {
 			c.Known &^= knownGapAhead
 			c.GapAhead = 0
 		}
+		if c.Known&knownLastSectors == 0 {
+			c.LastSectors = [3]uint32{}
+		}
 		if c.Known&knownSectors == 0 {
 			c.BestSectors = [3]uint32{}
 		}
-		if layout != layoutRace || !a.fieldVisible(layout, "stint") {
-			c.Known &^= knownStint
+		if layout != layoutRace || !a.fieldVisible(layout, "tyre_age") {
+			c.Known &^= knownTyreAge
 		}
-		if c.Known&knownStint == 0 {
-			c.StintLaps = 0
+		if c.Known&knownTyreAge == 0 {
+			c.TyreAgeLaps = 0
 		}
 		c.WearKnown &= 15
 		for wheel := range c.Wear {
@@ -206,8 +233,9 @@ func (a *App) viewState() viewState {
 			c.Best = 0
 		}
 		if !a.fieldVisible(layout, "S1") && !a.fieldVisible(layout, "S2") && !a.fieldVisible(layout, "S3") {
-			c.Known &^= knownSectors
+			c.Known &^= knownSectors | knownLastSectors
 			c.BestSectors = [3]uint32{}
+			c.LastSectors = [3]uint32{}
 		}
 		if layout == layoutRace && !a.fieldVisible(layout, "Avg") {
 			for i, key := range []string{"RL", "RR", "FL", "FR"} {
@@ -250,7 +278,11 @@ func tyreCell(c Car) any {
 	if c.TyrePNG == "" || !badgeRowReady(c) {
 		return "—"
 	}
-	return M{"image_data": M{"png": c.TyrePNG, "width": 24, "height": 24, "fit": "contain", "transparent": true}, "sort": c.Compound}
+	cell := M{"image_data": M{"png": c.TyrePNG, "width": 24, "height": 24, "fit": "contain", "transparent": true}}
+	if c.Known&knownTyre != 0 {
+		cell["sort"] = c.Compound
+	}
+	return cell
 }
 
 func wearCell(value float32, known bool) any {
@@ -300,6 +332,10 @@ func setupDetail(c Car) []M {
 	return []M{{"table": M{"id": fmt.Sprintf("setup-values-%d", c.Vehicle), "columns": []M{{"key": "left-setting", "title": "Setting"}, {"key": "left-value", "title": "Value", "width": 90}, {"key": "right-setting", "title": "Setting"}, {"key": "right-value", "title": "Value", "width": 90}}, "rows": rows, "compact": true}}}
 }
 func (a *App) view() M {
+	if a.displayMode == "window" {
+		return M{"subtitle": "Retro window · v" + addonVersion, "tick": true, "body": M{"blocks": []M{textBlock("Retro window selected. The window opens automatically during a session. To use this page instead, select Launcher page in the add-on's Display setting.")}}}
+	}
+
 	layout := layoutFor(a.frame)
 	selected := a.selectedColumns(layout)
 	if a.disabled[layout] || len(selected) == 0 {
@@ -340,6 +376,8 @@ func (a *App) view() M {
 			}
 		} else if a.highlight && int32(c.Vehicle) == a.frame.Player {
 			row["tone"] = "accent"
+		} else if qualifyingAtRisk(a.frame, c) {
+			row["tone"] = "bad"
 		}
 		row["cells"] = a.selectedCells(layout, cells)
 		batch = append(batch, row)

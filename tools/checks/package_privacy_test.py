@@ -40,6 +40,12 @@ def elf_debug(payload):
     return bytes(raw)
 
 class PrivacyTests(unittest.TestCase):
+    def test_notice_filename_does_not_allow_unreviewed_contacts(self):
+        with self.assertRaises(AssertionError):privacy('DESKTOP_LICENSES.txt',PRIVATE)
+
+    def test_public_help_exception_does_not_allow_other_paths(self):
+        with self.assertRaises(AssertionError):privacy('helper.exe',pe_debug(PERSONAL))
+
     def test_linux_elf_debug_is_decompressed_and_checked(self):
         payload=b'Go Linux debug: trimmed/module/main.go'
         raw=elf_debug(payload)

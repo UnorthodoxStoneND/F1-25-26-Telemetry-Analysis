@@ -1,4 +1,8 @@
 * text=auto eol=lf
+
+# Retain the exact audited upstream notices, including their line endings.
+DESKTOP_LICENSES.txt -text -whitespace
+native/DESKTOP-TOOLCHAIN-LICENSES.txt -text -whitespace
 *.exe binary
 *.swoftyaddon binary
 *.zip binary

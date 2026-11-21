@@ -4,7 +4,7 @@ The add-on’s first-party source is licensed under the MIT License; see LICENSE
 
 ## Go runtime and standard library — BSD-3-Clause
 
-The compiled Windows helper includes the Go runtime and standard library. The Go module has no external module dependencies.
+The compiled helpers include the Go runtime and standard library. The desktop helper also uses Fyne 2.6.3 and its pinned Go dependencies. Their full redistribution notices, embedded font licences and embedded C graphics-library notices are reproduced in DESKTOP_LICENSES.txt. Versions and hashes are recorded in source/go.mod and source/go.sum. MinGW-w64 headers/runtime notices and the GCC runtime exception used for the Windows desktop build are also reproduced there.
 
 Source: https://go.dev/LICENSE
 
@@ -40,8 +40,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ## Swofty SDK — MIT
 
-`native/swofty_api.h` and `native/live_images.h` are from Swofty Launcher release v1.9.80, commit
-`3088ab289541d277b8ad6ae7b9ae1b88e4440c92`. It is MIT-licensed, copyright
+`native/swofty_api.h` and `native/live_images.h` are from Swofty Launcher release v1.10.9, commit
+`3a56df3eb251f94eca534c82a5d8f1d3d12d13ab`. It is MIT-licensed, copyright
 2026 Jacob Nardella (Swofty). The complete notice is in `native/SDK-LICENSE.txt`.
 The SDK headers’ original licence identifiers and complete MIT notice are preserved.
 

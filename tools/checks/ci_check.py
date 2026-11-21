@@ -34,9 +34,9 @@ def main():
     elif args.check=='static':run(['go','-C','source','vet','./...'])
     elif args.check=='policy':run([sys.executable,'tools/checks/live_policy.py'])
     elif args.check=='readers':
+        run([NATIVE/'outlap_test.exe'])
         run([NATIVE/'readers_test.exe',NATIVE/'frame.bin'])
         run([NATIVE/'binding_test.exe'])
-        run([NATIVE/'stint_test.exe'])
         run([NATIVE/'proton_transport_test.exe'])
         run([NATIVE/'live_api_test.exe',NATIVE/'badges.bin'])
         run([test,'-test.v','-test.run','^TestNative(ABI|BadgesABI)$'],dict(os.environ,TELEMETRY_ABI_FRAME=str(NATIVE/'frame.bin'),TELEMETRY_BADGES_FRAME=str(NATIVE/'badges.bin')))
@@ -44,7 +44,7 @@ def main():
         run([NATIVE/'runtime_check.exe', ROOT/'bin/telemetry-live.dll'])
         missing=subprocess.run([str(NATIVE/'runtime_check.exe'),str(ROOT/'bin/telemetry-live.dll'),'telemetry-intentionally-missing-runtime.dll'],capture_output=True,text=True)
         assert missing.returncode==2 and 'Install or repair' in missing.stderr,missing
-        for mode in ([],['verified'],['current']):
+        for mode in ([],['verified'],['current'],['verified','missing-screen'],['current','missing-screen']):
             run([NATIVE/'publisher_test.exe',NATIVE/'swofty_core.dll',ROOT/'bin/telemetry-live.dll']+mode)
     elif args.check=='helper':run([sys.executable,'tools/checks/lifecycle_check.py'])
     elif args.check=='privacy':
