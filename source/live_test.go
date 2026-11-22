@@ -50,7 +50,7 @@ func TestNativeABI(t *testing.T) {
 		t.Fatal(err)
 	}
 	f, err := decode(b)
-	if err != nil || f.Tick != 12345 || len(f.Cars) != 1 || f.Cars[0].Name != "ABI Driver" || f.Cars[0].Identity != 1234 || f.Cars[0].Compound != 18 || f.Cars[0].Visual != 17 || f.SessionType != 15 || f.SessionKind != 4 || f.Cars[0].Laps != 7 || f.Cars[0].StintLaps != 3 || f.Cars[0].Known&knownStint == 0 || f.Cars[0].GapAhead != 1234 || f.Cars[0].BestSectors != [3]uint32{20000, 30000, 30000} {
+	if err != nil || f.Tick != 12345 || len(f.Cars) != 1 || f.Cars[0].Name != "ABI Driver" || f.Cars[0].Identity != 1234 || f.Cars[0].Compound != 18 || f.Cars[0].Visual != 17 || f.SessionType != 15 || f.SessionKind != 4 || f.Cars[0].Laps != 7 || f.Cars[0].TyreAgeLaps != 3 || f.Cars[0].Known&knownTyreAge == 0 || f.Cars[0].GapAhead != 1234 || f.Cars[0].BestSectors != [3]uint32{20000, 30000, 30000} || f.Cars[0].Known&knownLastSectors == 0 || f.Cars[0].LastSectors != [3]uint32{21000, 30000, 30000} || f.Cars[0].Known&knownPenalties == 0 || f.Cars[0].DriveThrough != 2 || f.Cars[0].StopGo != 3 || f.Cars[0].Known&knownTimePenalty == 0 || f.Cars[0].TimePenaltyMS != 5250 {
 		t.Fatalf("C++/Go layout disagrees: %+v %v", f, err)
 	}
 }
@@ -117,10 +117,13 @@ func TestLiveViewAndSetup(t *testing.T) {
 		enc := json.NewEncoder(file)
 		for i := range a.frame.Cars {
 			c := &a.frame.Cars[i]
-			c.Known |= knownLaps | knownGapAhead | knownGrid | knownBest | knownSectors | knownResult | knownStint
+			c.Known |= knownLaps | knownGapAhead | knownGrid | knownBest | knownSectors | knownLast | knownLastSectors | knownResult | knownTyreAge | knownPenalties | knownTimePenalty
 			c.Laps, c.GapAhead, c.Grid = 7, 1234, int32(i+1)
-			c.StintLaps = 3
+			c.TyreAgeLaps = 3
 			c.Best, c.BestSectors = 80000, [3]uint32{20000, 30000, 30000}
+			c.Last, c.LastSectors = 81000, [3]uint32{21000, 30000, 30000}
+			c.DriveThrough, c.StopGo = 2, 1
+			c.TimePenaltyMS = 5000
 			c.Flags = 2 << 8
 		}
 		v = a.view()
@@ -161,6 +164,10 @@ func TestLiveViewAndSetup(t *testing.T) {
 		}
 		a.frame = Frame{Player: -1}
 		a.expanded = ""
+		if e = enc.Encode(a.view()); e != nil {
+			t.Fatal(e)
+		}
+		a.displayMode = "window"
 		if e = enc.Encode(a.view()); e != nil {
 			t.Fatal(e)
 		}

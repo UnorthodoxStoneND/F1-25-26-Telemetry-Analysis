@@ -10,9 +10,10 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 )
 
-const addonVersion = "0.5.10"
+const addonVersion = "0.6.0"
 const addonID = "unorthodoxstonendmodding.udp-telemetry"
 
 type M = map[string]any
@@ -22,16 +23,20 @@ type Message struct {
 	Params json.RawMessage `json:"params"`
 }
 type App struct {
+	desktopError                    string
+	displayMode                     string
 	reader                          Reader
 	frame                           Frame
 	enabled                         bool
 	profileName, data, mode, status string
 	highlight                       bool
+	disableSlides                   bool
 	expanded                        string
 	lastView                        viewState
 	viewSent                        bool
 	disabled                        [3]bool
 	hidden                          [3]uint32
+	widths                          [3]map[string]float32
 	columnPath                      string
 	columnsOpen                     bool
 	editorLayout                    sessionLayout
@@ -48,6 +53,7 @@ func (a *App) profile(raw json.RawMessage) {
 		return
 	}
 	if a.profileName != p.Name || a.enabled != (p.Enabled && !p.Vanilla) {
+		a.desktopError = ""
 		a.reader.Close()
 		a.frame = Frame{Player: -1}
 		a.expanded = ""
@@ -57,8 +63,10 @@ func (a *App) profile(raw json.RawMessage) {
 	a.enabled = p.Enabled && !p.Vanilla
 }
 func (a *App) syncOptions() {
+	a.displayMode = "launcher"
 	a.mode = "nearest"
 	a.highlight = false
+	a.disableSlides = false
 	a.disabled = [3]bool{}
 	a.loadColumns()
 	name := a.profileName
@@ -78,11 +86,19 @@ func (a *App) syncOptions() {
 		return
 	}
 	options := p.Options[addonID]
+	var display string
+	if json.Unmarshal(options["display_mode"], &display) == nil && display == "window" {
+		a.displayMode = display
+	}
 	var mode string
 	if json.Unmarshal(options["drivers_shown"], &mode) == nil && mode == "full" {
 		a.mode = mode
 	}
 	_ = json.Unmarshal(options["highlight_player"], &a.highlight)
+	var sliding = true
+	if raw := options["sliding_animation"]; string(raw) != "null" && json.Unmarshal(raw, &sliding) == nil {
+		a.disableSlides = !sliding
+	}
 	for layout, key := range []string{"show_practice", "show_qualifying", "show_race"} {
 		var on bool
 		if raw := options[key]; string(raw) != "null" && json.Unmarshal(raw, &on) == nil {
@@ -171,16 +187,75 @@ func (a *App) event(raw json.RawMessage) (string, error) {
 	}
 	return "reload", nil // Session or car changed while the event was in flight.
 }
-func run(in io.Reader, out io.Writer) error {
+func run(in io.Reader, out io.Writer) error { return runWithDesktop(in, out, nil) }
+func runWithDesktop(in io.Reader, out io.Writer, desktop *desktopBridge) error {
 	a := App{mode: "nearest", frame: Frame{Player: -1}}
 	defer a.reader.Close()
 	scanner := bufio.NewScanner(in)
 	scanner.Buffer(make([]byte, 4096), 1024*1024)
 	send := func(value any) { _ = json.NewEncoder(out).Encode(value) }
 	ready := false
-	for scanner.Scan() {
+	// The protocol, reader and UI preferences have one owner. The scanner and
+	// desktop UI communicate with this loop, never touching App or Reader.
+	incoming := make(chan []byte)
+	stopped := make(chan struct{})
+	defer close(stopped)
+	go func() {
+		defer close(incoming)
+		for scanner.Scan() {
+			line := append([]byte(nil), scanner.Bytes()...)
+			select {
+			case incoming <- line:
+			case <-stopped:
+				return
+			}
+		}
+	}()
+	ticker := time.NewTicker(200 * time.Millisecond)
+	defer ticker.Stop()
+	life := windowLifecycle{}
+	var commands <-chan desktopAction
+	if desktop != nil {
+		commands = desktop.actions
+	}
+	updateDesktop := func() {
+		if desktop != nil {
+			desktop.publish(a.retroModel(life.observe(a.displayMode == "window" && a.enabled, a.frame, time.Now())))
+		}
+	}
+	for {
+		var line []byte
+		select {
+		case action := <-commands:
+			if action.Kind == "dismiss" {
+				life.dismiss()
+			} else if a.displayMode == "window" {
+				a.retroAction(action)
+			}
+			updateDesktop()
+			continue
+		case <-ticker.C:
+			if ready && desktop != nil {
+				a.syncOptions()
+				if a.displayMode == "window" {
+					a.refresh()
+				}
+				updateDesktop()
+				if a.viewSent && a.needsView() {
+					send(M{"method": "invalidate", "params": M{"section": "telemetry"}})
+					a.lastView = a.viewState()
+				}
+			}
+			continue
+		case next, ok := <-incoming:
+			if !ok {
+				return scanner.Err()
+			}
+			line = next
+		}
+
 		var msg Message
-		if json.Unmarshal(scanner.Bytes(), &msg) != nil {
+		if json.Unmarshal(line, &msg) != nil {
 			continue
 		}
 		var result any
@@ -224,7 +299,8 @@ func run(in io.Reader, out io.Writer) error {
 			if runtime.GOOS == "linux" && a.enabled {
 				// Host calls are answered before the launcher sends another request.
 				send(M{"id": 1000001, "method": "addon_game_dir", "params": nil})
-				if !scanner.Scan() {
+				replyLine, ok := <-incoming
+				if !ok {
 					return scanner.Err()
 				}
 				var reply struct {
@@ -232,7 +308,7 @@ func run(in io.Reader, out io.Writer) error {
 					Result *string
 					Error  json.RawMessage
 				}
-				if json.Unmarshal(scanner.Bytes(), &reply) != nil || reply.ID != 1000001 || len(reply.Error) > 0 && string(reply.Error) != "null" {
+				if json.Unmarshal(replyLine, &reply) != nil || reply.ID != 1000001 || len(reply.Error) > 0 && string(reply.Error) != "null" {
 					err = fmt.Errorf("The launcher's add-on game directory is unavailable")
 					break
 				}
@@ -251,6 +327,21 @@ func run(in io.Reader, out io.Writer) error {
 				send(M{"method": "invalidate", "params": M{"section": "telemetry"}})
 			}
 		case "event":
+			if ready && runtime.GOOS == "linux" && a.enabled && strings.Contains(string(msg.Params), "startup") {
+				send(M{"id": 1000001, "method": "addon_game_dir", "params": nil})
+				replyLine, ok := <-incoming
+				if !ok {
+					return scanner.Err()
+				}
+				var reply struct {
+					ID     uint64
+					Result *string
+					Error  json.RawMessage
+				}
+				if json.Unmarshal(replyLine, &reply) == nil && reply.ID == 1000001 && reply.Result != nil && (len(reply.Error) == 0 || string(reply.Error) == "null") {
+					a.reader.setAddonDir(*reply.Result)
+				}
+			}
 			if !ready {
 				err = fmt.Errorf("hello is required first")
 			} else {
@@ -263,6 +354,7 @@ func run(in io.Reader, out io.Writer) error {
 		default:
 			err = fmt.Errorf("unsupported launcher method")
 		}
+		updateDesktop()
 		if len(msg.ID) > 0 {
 			if err != nil {
 				send(M{"id": msg.ID, "error": err.Error()})
@@ -271,9 +363,8 @@ func run(in io.Reader, out io.Writer) error {
 			}
 		}
 	}
-	return scanner.Err()
 }
-func main() {
+func helperMain() {
 	if err := run(os.Stdin, os.Stdout); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

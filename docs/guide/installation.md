@@ -1,17 +1,15 @@
 # Installation
 
-**Linux support is a work in progress (WIP) and may not be fully functional.** The included Linux x64 helper is experimental; full in-game Linux/Proton operation has not been validated. Windows remains the in-game-validated platform.
-
-1. Download **`F1_Telemetry_v0.5.10.zip`** from [GitHub Releases](https://github.com/UnorthodoxStoneND/F1-25-26-Telemetry-Analysis/releases).
+1. Download **`F1_Telemetry_v0.6.0.zip`** from the GitHub release, or install version 0.6.0 through Swofty once its browser submission is approved.
 2. Close the game. In Swofty, open **Addons**, select **Install addon from computer**, and choose the ZIP.
 3. Enable **F1 Live Telemetry** in your active profile. Configure **Drivers shown** and **Highlight my row** in its settings.
-4. Restart Swofty after replacing an earlier version, then launch the game through Swofty so its native component is loaded. Open **Live Telemetry** in the launcher.
+4. Choose **Launcher page** or **Retro window** under **Telemetry display**. Restart Swofty after replacing an earlier version, then launch the game through Swofty so its native component is loaded. Open **Live Telemetry** for launcher mode; window mode opens automatically once fresh session data is available. The inactive tab remains visible with the released launcher section API, without a telemetry table. Only one mode displays telemetry at a time.
 
 No game UDP settings or port configuration are needed. Grid and garage values appear once the actual session is active and its underlying game systems become available; a lap time cannot appear before a completed lap exists.
 
 ## Updates and earlier recordings
 
-Version 0.5.x is live-only. Existing recordings in Documents/F1 Game Telemetry are left untouched and cannot be reviewed in this version. Keep 0.4.2 if recording or post-session analysis is needed.
+Version 0.6.0 is live-only. Existing recordings in Documents/F1 Game Telemetry are left untouched and cannot be reviewed in this version. Keep 0.4.2 if recording or post-session analysis is needed.
 
 See [compatibility](../reference/compatibility.md) for supported launcher/game versions and [live data](../reference/live-data.md) for runtime behaviour.
 

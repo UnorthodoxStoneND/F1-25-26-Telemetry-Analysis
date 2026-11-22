@@ -1,10 +1,20 @@
 # Compatibility and testing
 
-- **Operating system:** Windows x64. **Linux support is a work in progress (WIP) and may not be fully functional.** An experimental native Linux x64 helper is included for the game running under Proton/Wine; the complete in-game path has not been validated.
-- **Launcher:** Swofty 1.9.80 and compatible later versions retaining launcher API 1, native binding API 9, Live State API 5 or later, CarOps API 1 or later, session callbacks and memory-check API 1. No maximum launcher version is imposed; future breaking API changes may require an update.
+The 0.6.0 standalone window adds a Fyne desktop frontend to the existing helper. Windows uses system OpenGL; Linux uses system X11/OpenGL libraries and is built on Ubuntu 24.04. Go and Fyne are build dependencies, not separate user installations. Linux graphics/Proton combinations and automatic in-game window transitions still need user testing. The launcher view remains selectable, but an inactive launcher tab cannot yet be hidden through the released section API.
+
+- **Operating system:** Windows x64; experimental native Linux x64 helper with the game running under Proton/Wine.
+- **Launcher:** Swofty 1.10.9 and compatible later versions retaining launcher API 1, native binding API 9, Live State API 6 or later, CarOps API 1 or later, session callbacks and memory-check API 1. No maximum launcher version is imposed; future breaking API changes may require an update.
 - **Game:** F1 25 on Steam, including the 2026 Season Pack and My Team. Object readers support the inspected Steam layouts with PE timestamps `1789118616` and `1794312636`. Swofty resolves the addresses for the running build; object ownership, vehicle identity and vector bounds are checked before values are shown. Unsupported builds or missing bindings produce an explicit message.
 
 Automated checks cover the live readers, Live State/CarOps acquisition, session transitions, completed lap timing, tyre-pressure wheel order, shared-memory format and launcher views. In-game testing confirmed setup values display for all cars, with the player's values checked against the game. Resource improvements have not been measured across every supported build.
+
+## Release verification: 0.6.0
+
+0.6.0 promotes the runtime behaviour of 0.6.0-test.26. On 21 November 2026 the user reported everything working after the OUT-status and within-session tyre-age checklist. Earlier user reports covered all three views, saved preferences, F2 images, session/window transitions and Flashback. These are user-reported in-game results, not an independent agent run or an exhaustive per-feature test matrix. The launcher version and exact game build for the final user run were not supplied. The installed launcher observed during the preceding tyre-age investigation was 1.10.9; the required API is Live State v6.
+
+Offline host fixtures cover the two supported Steam PE timestamps 1789118616 and 1794312636; these do not establish in-game coverage of both builds. Windows and Linux helpers are built and tested offline. Linux/Proton in-game testing remains outstanding and support stays experimental.
+
+Known upstream limits: tyre age does not carry qualifying usage into a race (still present in inspected Swofty 1.10.21); grid penalties are not exposed; elimination cutoffs are calculated; an inactive launcher tab cannot be hidden; early Finances-screen hiding depends on an optional exported screen binding. The build introduces no private scan/hook to replace missing launcher bindings. Do not describe these pending capabilities as verified or fully supported.
 
 ## In-game verification: 0.5.9-test.9 / 0.5.9
 
@@ -33,3 +43,5 @@ Swofty's `addon_game_dir` host call supplies the actual installed game-copy path
 ## In-game verification: 0.5.10-test.3 tyre icons
 
 On 19 November 2026, the user confirmed that the service-provided icons loaded for all five tested tyres. This confirms the tyre-image display in that test; it does not confirm Linux/Proton compatibility. Full in-game Linux/Proton testing remains outstanding.
+
+The career-rewards/Finances screen observer is optional. It is registered only when the running core resolves `Vm_Open_Screen`; missing exports are logged and cannot disable the native publisher. Session/flow visibility signals remain active without it, but Finances may retain the window until a supported session exit. Restoring earlier Finances hiding on these cores requires a launcher-exposed screen notification or binding.

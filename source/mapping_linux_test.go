@@ -23,7 +23,7 @@ func linuxBridge(t *testing.T) (string, string, []byte) {
 	put := binary.LittleEndian.PutUint32
 	binary.LittleEndian.PutUint64(b[16:], 2)
 	binary.LittleEndian.PutUint64(b[24:], 42)
-	put(b[260:], knownName|knownPosition|knownTyre|knownStint)
+	put(b[260:], knownName|knownPosition|knownTyre|knownTyreAge)
 	put(b[556:], 3)
 	put(b[264:], 1)
 	put(b[272:], 18)
@@ -45,7 +45,7 @@ func TestLinuxSharedSnapshotLifecycle(t *testing.T) {
 	r.setAddonDir(dir)
 	defer r.Close()
 	first, err := r.Read()
-	if err != nil || len(first.Cars) != 1 || first.Cars[0].BadgePNG == "" || first.Cars[0].TyrePNG == "" || first.Cars[0].StintLaps != 3 {
+	if err != nil || len(first.Cars) != 1 || first.Cars[0].BadgePNG == "" || first.Cars[0].TyrePNG == "" || first.Cars[0].TyreAgeLaps != 3 {
 		t.Fatal("Linux paired image snapshot failed", err)
 	}
 	held := first.Cars[0]

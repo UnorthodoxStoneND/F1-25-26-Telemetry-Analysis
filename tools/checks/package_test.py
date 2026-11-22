@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import zipfile
 
 ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location('telemetry_package', ROOT/'source/package.py')
@@ -27,10 +28,12 @@ class PackagingTests(unittest.TestCase):
         self.source = self.workspace/'Source'
         for folder in ('source', 'native', 'bin'):
             (self.source/folder).mkdir(parents=True, exist_ok=True)
-        for name in ('README.md', 'CHANGELOG.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md', 'source/go.mod', 'native/SDK-LICENSE.txt', 'bin/telemetry-live.exe', 'bin/telemetry-live.dll', 'bin/telemetry-live-linux'):
+        for name in ('README.md', 'CHANGELOG.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md', 'DESKTOP_LICENSES.txt', 'source/go.mod', 'source/go.sum', 'source/retro_icon.png', 'native/SDK-LICENSE.txt', 'bin/telemetry-live.exe', 'bin/telemetry-live.dll', 'bin/telemetry-live-linux'):
             (self.source/name).write_bytes(b'fixture')
         (self.source/'icon.png').write_bytes(b'\x89PNG\r\n\x1a\nfixture')
         shutil.copy2(ROOT/'source/package.py', self.source/'source/package.py')
+        for name in ('native/SWOFTY-LAYOUTS-LICENSE.txt','native/DESKTOP-TOOLCHAIN-LICENSES.txt'):
+            (self.source/name).write_bytes(b'fixture licence')
         self.testing = self.workspace/'Testing'
         self.testing.mkdir()
         self.releases = self.workspace/'Releases'
@@ -146,6 +149,13 @@ class PackagingTests(unittest.TestCase):
         self.assertTrue(previous.exists())
         self.assertFalse((self.testing/'Archive').exists())
         self.assert_checksum(archive)
+
+    def test_only_runtime_and_required_documentation_are_shipped(self):
+        (self.source/'native/unreferenced.cpp').write_text('not a runtime file')
+        (self.source/'source/unused_test.go').write_text('package main')
+        archive=self.build()
+        with zipfile.ZipFile(archive) as z:
+            self.assertEqual(set(z.namelist()), {'swofty.json','README.md','CHANGELOG.md','LICENSE','THIRD_PARTY_NOTICES.md','DESKTOP_LICENSES.txt','icon.png','bin/telemetry-live.exe','bin/telemetry-live.dll','bin/telemetry-live-linux','native/SDK-LICENSE.txt','native/SWOFTY-LAYOUTS-LICENSE.txt','native/DESKTOP-TOOLCHAIN-LICENSES.txt'})
 
     def test_test_build_cannot_target_releases(self):
         with self.assertRaisesRegex(ValueError, 'must not write into Releases'):

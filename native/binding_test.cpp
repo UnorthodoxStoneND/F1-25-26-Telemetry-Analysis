@@ -47,12 +47,12 @@ int main() {
   f.live_cars[0].have&=~SWOFTY_LIVE_HAVE_CLASS;
   assert(context.fill(f.memory,f.sites,frame,&f.live,&f.ops));
   assert(frame.cars[0].grid==int(count)&&(frame.cars[0].known&livewire::GRID));
-  f.memory.put(f.results[0],uint8_t(255));
+  f.details[0].have&=~SWOFTY_LIVE_HAVE_GRID;
   assert(context.fill(f.memory,f.sites,frame,&f.live,&f.ops));
   assert(!(frame.cars[0].known&livewire::GRID));
-  f.memory.put(f.results[0],uint8_t(0));f.memory.put(f.results[0]+0x90,uint32_t(100));
+  f.details[0].have|=SWOFTY_LIVE_HAVE_GRID;f.details[0].grid_position=100;
   assert(context.fill(f.memory,f.sites,frame,&f.live,&f.ops));
   assert(!(frame.cars[0].known&livewire::GRID));
  }
- std::cout<<"PASS: exported grid bindings, session countdown and Live State race lap counter\n";
+ std::cout<<"PASS: Live State grid, session countdown and Live State race lap counter\n";
 }

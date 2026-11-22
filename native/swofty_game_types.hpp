@@ -8,7 +8,6 @@
 #include <cstdint>
 namespace swofty::game {
 struct NeRobinHoodMapU64;
-struct SessionVehicleEntry;
 struct GameVehicleProgressSystem;
 struct GameManagerLive {
     uint8_t _pad_0x0[0x30];
@@ -38,38 +37,6 @@ static_assert(offsetof(NeRobinHoodMapU64, mask) == 0x30);
 static_assert(offsetof(NeRobinHoodMapU64, max_count) == 0x38);
 static_assert(offsetof(NeRobinHoodMapU64, step) == 0x40);
 static_assert(offsetof(NeRobinHoodMapU64, shift) == 0x44);
-
-struct SessionSystem {
-    uint8_t _pad_0x0[0x148];
-    SessionVehicleEntry **entries_begin; // L2 experimental
-    SessionVehicleEntry **entries_end; // L2 experimental
-};
-static_assert(offsetof(SessionSystem, entries_begin) == 0x148);
-static_assert(offsetof(SessionSystem, entries_end) == 0x150);
-
-struct SessionVehicleEntry {
-    uint8_t vehicle_id; // L2 experimental
-    uint8_t _pad_0x1[0x17];
-    uint8_t status; // L2 experimental
-    uint8_t _pad_0x19[0x1f];
-    uint64_t time_penalty_a; // L2 experimental
-    uint64_t time_penalty_b; // L2 experimental
-    uint32_t position_a; // L2 experimental
-    uint8_t _pad_0x4c[0x4];
-    uint32_t position_b; // L2 experimental
-    uint8_t _pad_0x54[0x3c];
-    uint32_t grid_position_a; // L2 experimental
-    uint8_t _pad_0x94[0x4];
-    uint32_t grid_position_b; // L2 experimental
-};
-static_assert(offsetof(SessionVehicleEntry, vehicle_id) == 0x0);
-static_assert(offsetof(SessionVehicleEntry, status) == 0x18);
-static_assert(offsetof(SessionVehicleEntry, time_penalty_a) == 0x38);
-static_assert(offsetof(SessionVehicleEntry, time_penalty_b) == 0x40);
-static_assert(offsetof(SessionVehicleEntry, position_a) == 0x48);
-static_assert(offsetof(SessionVehicleEntry, position_b) == 0x50);
-static_assert(offsetof(SessionVehicleEntry, grid_position_a) == 0x90);
-static_assert(offsetof(SessionVehicleEntry, grid_position_b) == 0x98);
 
 struct CarLive {
     char *teleport_tag; // L2 experimental

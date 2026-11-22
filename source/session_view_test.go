@@ -61,8 +61,8 @@ func cellText(t *testing.T, v any) string {
 }
 func TestSessionSpecificColumnsAndBadges(t *testing.T) {
 	practice := []string{"position", "team", "driver", "tyre", "laps", "last", "best", "status", "setup"}
-	qualifying := []string{"position", "team", "driver", "tyre", "laps", "gap", "last", "best", "status", "setup"}
-	racing := []string{"position", "gain", "team", "driver", "tyre", "stint", "gap", "last", "best", "S1", "S2", "S3", "FL", "FR", "RL", "RR", "Avg", "status"}
+	qualifying := []string{"position", "team", "driver", "tyre", "laps", "gap", "last", "best", "S1", "S2", "S3", "pen", "status", "setup"}
+	racing := []string{"position", "gain", "team", "driver", "tyre", "tyre_age", "gap", "last", "best", "S1", "S2", "S3", "FL", "FR", "RL", "RR", "Avg", "pen", "status"}
 	for id := uint32(1); id <= 18; id++ {
 		a := App{frame: grid(), mode: "full"}
 		a.frame.SessionType = id
@@ -128,8 +128,9 @@ func TestRaceValuesAndUnknowns(t *testing.T) {
 	c.Grid = 5
 	c.GapAhead = 1234
 	c.Best = 80000
-	c.BestSectors = [3]uint32{20000, 30000, 30000}
-	c.Known |= knownGrid | knownGapAhead | knownBest | knownSectors | knownResult
+	c.BestSectors = [3]uint32{19000, 30000, 31000}
+	c.LastSectors = [3]uint32{20000, 30000, 30000}
+	c.Known |= knownGrid | knownGapAhead | knownBest | knownSectors | knownLastSectors | knownResult
 	c.Flags = 2 << 8
 	c.WearKnown = 15
 	c.Wear = [4]float32{10, 20, 30, 40}
@@ -143,7 +144,7 @@ func TestRaceValuesAndUnknowns(t *testing.T) {
 	if got := cellText(t, rowCells(t, &a, 0)["gap"]); got != "+0.000" {
 		t.Fatal("valid zero interval lost", got)
 	}
-	c.Known &^= knownGrid | knownGapAhead | knownSectors
+	c.Known &^= knownGrid | knownGapAhead | knownSectors | knownLastSectors
 	c.WearKnown = 7
 	cells = rowCells(t, &a, 0)
 	for _, key := range []string{"gain", "gap", "S1", "S2", "S3", "Avg"} {
@@ -260,7 +261,8 @@ func TestSessionCellWireFormats(t *testing.T) {
 			c.Grid = 3
 			c.GapAhead = 1234
 			c.Best = 80000
-			c.BestSectors = [3]uint32{20000, 30000, 30000}
+			c.BestSectors = [3]uint32{19000, 30000, 31000}
+			c.LastSectors = [3]uint32{20000, 30000, 30000}
 			c.Flags = 2 << 8
 			c.WearKnown = 15
 			raw, err := json.Marshal(a.view())
@@ -302,5 +304,84 @@ func TestSessionCellWireFormats(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+func TestQualifyingBestLapSectors(t *testing.T) {
+	for sessionType := uint32(5); sessionType <= 14; sessionType++ {
+		a := App{frame: grid(), mode: "full"}
+		a.frame.SessionType = sessionType
+		c := &a.frame.Cars[0]
+		c.Known |= knownBest | knownLast | knownSectors
+		c.Best, c.Last = 80000, 90000
+		c.BestSectors = [3]uint32{20000, 31000, 29000}
+		for key, want := range map[string]string{"S1": "20.000", "S2": "31.000", "S3": "29.000"} {
+			if got := cellText(t, rowCells(t, &a, 0)[key]); got != want {
+				t.Fatalf("session %d %s: %s", sessionType, key, got)
+			}
+		}
+		// Missing best-lap sectors must not retain values from another sample.
+		c.Known &^= knownSectors
+		for _, key := range []string{"S1", "S2", "S3"} {
+			if cellText(t, rowCells(t, &a, 0)[key]) != "—" {
+				t.Fatal("unknown qualifying sector fabricated", key)
+			}
+		}
+	}
+}
+
+func TestRaceLastLapSectorsAndQualifyingBestStaySeparate(t *testing.T) {
+	a := App{frame: grid(), mode: "full"}
+	c := &a.frame.Cars[0]
+	c.Known |= knownLast | knownBest | knownLastSectors | knownSectors
+	c.Last, c.Best = 83000, 80000
+	c.LastSectors = [3]uint32{21000, 31000, 31000}
+	c.BestSectors = [3]uint32{20000, 30000, 30000}
+	for _, session := range []uint32{15, 16, 17, 5, 10} {
+		a.frame.SessionType = session
+		want := "21.000"
+		if layoutFor(a.frame) == layoutQualifying {
+			want = "20.000"
+		}
+		if got := cellText(t, rowCells(t, &a, 0)["S1"]); got != want {
+			t.Fatalf("session %d: %s", session, got)
+		}
+		a.lastView, a.viewSent = a.viewState(), true
+		if layoutFor(a.frame) == layoutQualifying {
+			c.BestSectors[0]++
+		} else {
+			c.LastSectors[0]++
+		}
+		if !a.needsView() {
+			t.Fatal("visible sector change did not refresh", session)
+		}
+		c.LastSectors[0], c.BestSectors[0] = 21000, 20000
+	}
+	a.frame.SessionType = 15
+	c.Known &^= knownLastSectors
+	if cellText(t, rowCells(t, &a, 0)["S1"]) != "—" {
+		t.Fatal("race fell back to best sectors")
+	}
+}
+func TestLastSectorSnapshotValidation(t *testing.T) {
+	b := fixture()
+	at := 256
+	binary.LittleEndian.PutUint32(b[at+4:], knownLast|knownLastSectors)
+	binary.LittleEndian.PutUint32(b[at+24:], 83000)
+	for i, ms := range []uint32{21000, 31000, 31000} {
+		binary.LittleEndian.PutUint32(b[at+304+i*4:], ms)
+	}
+	f, err := decode(b)
+	if err != nil || f.Cars[0].Known&knownLastSectors == 0 || f.Cars[0].LastSectors[0] != 21000 {
+		t.Fatal("last sector ABI", err)
+	}
+	binary.LittleEndian.PutUint32(b[at+304:], 20000)
+	f, err = decode(b)
+	if err != nil || f.Cars[0].Known&knownLastSectors != 0 {
+		t.Fatal("inconsistent last sectors accepted", err)
+	}
+	binary.LittleEndian.PutUint32(b[8:], 2)
+	if _, err = decode(b); err == nil {
+		t.Fatal("old native wire accepted")
 	}
 }

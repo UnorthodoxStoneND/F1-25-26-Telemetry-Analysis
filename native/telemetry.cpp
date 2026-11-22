@@ -2,7 +2,6 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
-#include <atomic>
 #include <cstdio>
 #include <cstring>
 #include <initializer_list>
@@ -15,7 +14,7 @@
 #include "session_metrics.h"
 #include "badges.h"
 #include "proton_transport.h"
-#include "stint.h"
+#include "outlap.h"
 
 namespace {
 const SwoftyApi* api;
@@ -35,13 +34,10 @@ char binding_error[192]{};
 uint32_t game_stamp=0;
 directlive::Sites sites;
 directlive::Context direct_context;
+outlap::Tracker outlaps;
 sessionmetrics::Sites metric_sites;
-std::atomic<uint64_t> lap_system{0};
 uint64_t next_sample=0;
 uint32_t context_kind=livewire::SESSION_UNKNOWN;
-readers::TimingCache timing_cache[livewire::CARS]{};
-uint64_t car_identity[livewire::CARS]{};
-stint::Counter stint_counter;
 
 bool copy_memory(uint64_t at,void* out,size_t len) {
     if(!memory || !memory->readable(reinterpret_cast<const void*>(at),len)) return false;
@@ -102,13 +98,18 @@ void publish() {
 
 void on_event(const SwoftyEvent* event,void*) {
     if(!event||!event->name) return;
+    if(!std::strcmp(event->name,"flow.state")) {
+        const bool ready=session.gameplay;
+        if(event->data) {
+            const auto& flow=*static_cast<const SwoftyFlowState*>(event->data);
+            session.flow(flow.hash,flow.to);
+        }
+        if(ready!=session.gameplay) publish();
+        return;
+    }
     session.event(event->name);
     if(!std::strcmp(event->name,"session.start")||session.ended) {
         context_kind=livewire::SESSION_UNKNOWN;
-        lap_system.store(0);
-        for(auto& cache:timing_cache) cache={};
-        stint_counter.reset();
-        std::memset(car_identity,0,sizeof car_identity);
     }
     publish();
 }
@@ -117,18 +118,13 @@ int on_session_context(void*,SwoftyHookCall* call) {
         context_kind=sessioninfo::kind(api->hooks,call->context);
     return 0;
 }
-using GetLapFn=void*(void*,uint8_t);
-GetLapFn* original_get;
-void* get_lap(void* self,uint8_t car) {
-    void* result=original_get(self,car);
-    lap_system.store(reinterpret_cast<uint64_t>(self),std::memory_order_relaxed);
-    return result;
-}
-using ReportFn=uint64_t(void*,void*);
-ReportFn* original_report;
-uint64_t report_lap(void* self,void* message) {
-    auto result=original_report(self,message);
-    lap_system.store(reinterpret_cast<uint64_t>(self),std::memory_order_relaxed);
+// Same read-only wrapper ABI as the released core's ui.cpp open_hook. Do not
+// use SessionHost.on_screen: it is a single listener owned by other core clients.
+using OpenScreenFn=uint64_t(void*,void*,void*,void*);
+OpenScreenFn* original_screen;
+uint64_t open_screen(void* scene,void* screen,void* a3,void* a4) {
+    const auto result=original_screen(scene,screen,a3,a4);
+    if(session.opened_screen(copy_memory,reinterpret_cast<uint64_t>(screen))) publish();
     return result;
 }
 void on_frame(double,void*) {
@@ -153,33 +149,17 @@ void on_frame(double,void*) {
         status=0;
         if(flow && flow(hash(name),&status,&age)==SWOFTY_ASSET_OK && status!=0) blocked=true;
     }
-    bool was_permitted=session.permitted;
     if(!session.allow(in_session,blocked)) {
-        if(was_permitted) {
-            lap_system.store(0);for(auto& cache:timing_cache)cache={};
-            stint_counter.reset();
-            std::memset(car_identity,0,sizeof car_identity);
-        }
         session.frame.diagnostic[0]=0;
         if(flow_result==SWOFTY_ASSET_UNAVAILABLE)
             std::snprintf(session.frame.diagnostic,sizeof session.frame.diagnostic,"Swofty's session-state API is unavailable.");
         publish();return;
     }
-    if(!was_permitted) {
-        lap_system.store(0);for(auto& cache:timing_cache)cache={};
-        stint_counter.reset();
-        std::memset(car_identity,0,sizeof car_identity);
-    }
     livewire::Frame next{};auto read=copy_memory;
     if(direct_context.fill(read,sites,next,live,car_ops)) {
         next.session_kind=sessioninfo::compatible_kind(next.session_type,context_kind);
         sessionmetrics::fill(read,metric_sites,direct_context.registry,next,live,time_remaining);
-        for(unsigned n=0;n<next.count;n++) {
-            auto& c=next.cars[n];auto id=c.vehicle;
-            if(car_identity[id]!=c.identity) {timing_cache[id]={};car_identity[id]=c.identity;}
-            readers::timing(read,lap_system.load(),id,c,&timing_cache[id]);
-            stint_counter.apply(c);
-        }
+        outlaps.apply(next,session.serial);
         session.frame=next;
     } else if(!(session.frame.state&livewire::ACTIVE)) {
         session.frame=next;
@@ -198,7 +178,6 @@ void on_load() {
     direct=memory && verified_layout();
     if(direct) {
         sites.manager=resolve_binding("g_Game_Manager");
-        sites.results=resolve_binding("k_Live_SessionSystemKey");
         metric_sites.red_key=api->resolve("k_Live_RedFlagSystemKey");
         metric_sites.red_vt=api->resolve("vt_Sess_RedFlagSystem");
         metric_sites.race_vt=api->resolve("vt_Sess_RaceRuleset");
@@ -226,7 +205,7 @@ void on_load() {
         std::snprintf(session.frame.diagnostic,sizeof session.frame.diagnostic,"The launcher core does not expose session events.");publish();return;
     }
     bool events_ok=true;
-    for(const char* event:{"session.start","session.end","session.unload","pause","resume"})
+    for(const char* event:{"session.start","session.end","session.unload","pause","resume","flow.state"})
         events_ok &= api->events->subscribe(event,on_event,nullptr,&token)==SWOFTY_ASSET_OK;
     if(api->hooks&&api->hooks->version>=1&&api->hooks->available&&api->hooks->available()&&
        api->hooks->attach&&api->hooks->context_in) {
@@ -255,10 +234,17 @@ extern "C" __declspec(dllexport) int SwoftyAddonInit(const SwoftyApi* value) {
     // hooks even while their code is encrypted: the core waits for decryption.
     SwoftyMixin load{nullptr,SWOFTY_MIXIN_ON_LOAD,0,reinterpret_cast<void*>(on_load),nullptr};
     if(!api->register_mixins(&load,1)) return 0;
-    for(const auto& hook:{
-        SwoftyMixin{"Sess_LapTimes_GetCarData",SWOFTY_MIXIN_WRAP,0,reinterpret_cast<void*>(get_lap),reinterpret_cast<void**>(&original_get)},
-        SwoftyMixin{"Sess_LapTimes_ReportNewLapTime",SWOFTY_MIXIN_WRAP,0,reinterpret_cast<void*>(report_lap),reinterpret_cast<void**>(&original_report)}}) {
-        if(memory && verified_layout() && !api->register_mixins(&hook,1)) return 0;
+    // Screen-open is optional: the running core's exported binding list may
+    // omit this internal UI target. Declaring an absent target drops ALL of
+    // this add-on's mixins during core commit, including its publisher.
+    if(memory && verified_layout()) {
+        if(api->resolve("Vm_Open_Screen")) {
+            SwoftyMixin screen_hook{"Vm_Open_Screen",SWOFTY_MIXIN_WRAP,0,reinterpret_cast<void*>(open_screen),reinterpret_cast<void**>(&original_screen)};
+            if(!api->register_mixins(&screen_hook,1))
+                api->log("[telemetry] optional career-rewards screen hook registration unavailable; telemetry remains enabled");
+        } else {
+            api->log("[telemetry] optional career-rewards screen hook unavailable (Vm_Open_Screen); using flow/session visibility signals");
+        }
     }
     return 1;
 }

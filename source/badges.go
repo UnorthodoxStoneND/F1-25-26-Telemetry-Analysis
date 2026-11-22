@@ -92,9 +92,10 @@ func (cache *badgeCache) apply(b []byte, f *Frame) {
 }
 
 func badgeRowReady(c Car) bool {
-	const basics = knownName | knownPosition | knownTyre
-	return c.Known&basics == basics && c.Name != "" && c.Position > 0 &&
-		(c.Compound == 7 || c.Compound == 8 || (c.Compound >= 16 && c.Compound <= 20))
+	// Images have already been matched to this car's identity and committed
+	// snapshot. A populated driver row is enough; compound IDs, classification
+	// and other optional telemetry must not hide otherwise valid service images.
+	return c.Identity != 0 && c.Known&knownName != 0 && c.Name != ""
 }
 
 func badgeCell(c Car) any {

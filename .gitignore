@@ -3,6 +3,8 @@
 /dist/
 /.verify/
 /.gocache/
+/source/.gomodcache/
+/source/.gocache/
 *.exe
 *.dll
 *.obj

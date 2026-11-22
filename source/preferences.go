@@ -63,8 +63,9 @@ func (a *App) preferencePath() string {
 }
 
 type columnPreferences struct {
-	Version int                 `json:"version"`
-	Hidden  map[string][]string `json:"hidden"`
+	Version int                           `json:"version"`
+	Hidden  map[string][]string           `json:"hidden"`
+	Widths  map[string]map[string]float32 `json:"widths,omitempty"`
 }
 
 func (a *App) loadColumns() {
@@ -74,6 +75,7 @@ func (a *App) loadColumns() {
 	}
 	a.columnPath = path
 	a.hidden = [3]uint32{}
+	a.widths = [3]map[string]float32{}
 	a.columnsOpen = false
 	if path == "" {
 		return
@@ -88,18 +90,39 @@ func (a *App) loadColumns() {
 		return
 	}
 	for layout, key := range layoutKeys {
+		for field, width := range saved.Widths[key] {
+			if field == "stint" {
+				field = "tyre_age"
+				if _, exists := saved.Widths[key][field]; exists {
+					continue
+				}
+			}
+			if field != "counter" && fieldBit(sessionLayout(layout), field) != 0 && validColumnWidth(width) {
+				if a.widths[layout] == nil {
+					a.widths[layout] = map[string]float32{}
+				}
+				a.widths[layout][field] = width
+			}
+		}
 		for _, field := range saved.Hidden[key] {
+			if field == "stint" {
+				field = "tyre_age"
+			}
 			a.hidden[layout] |= fieldBit(sessionLayout(layout), field)
 		}
 	}
 }
-func (a *App) saveColumns(hidden [3]uint32) error {
+func (a *App) saveColumns(hidden [3]uint32) error { return a.saveColumnState(hidden, a.widths) }
+func (a *App) saveColumnState(hidden [3]uint32, widths [3]map[string]float32) error {
 	path := a.preferencePath()
 	if path == "" {
 		return fmt.Errorf("Column settings cannot be saved without a valid launcher profile")
 	}
-	saved := columnPreferences{Version: 1, Hidden: map[string][]string{}}
+	saved := columnPreferences{Version: 1, Hidden: map[string][]string{}, Widths: map[string]map[string]float32{}}
 	for layout, key := range layoutKeys {
+		if len(widths[layout]) > 0 {
+			saved.Widths[key] = widths[layout]
+		}
 		for _, col := range columns(sessionLayout(layout)) {
 			field := col["key"].(string)
 			if hidden[layout]&fieldBit(sessionLayout(layout), field) != 0 {
@@ -134,6 +157,7 @@ func (a *App) saveColumns(hidden [3]uint32) error {
 		return fmt.Errorf("Save columns: %w", err)
 	}
 	a.hidden = hidden
+	a.widths = widths
 	a.columnPath = path
 	if !a.fieldVisible(layoutFor(a.frame), "setup") {
 		a.expanded = ""
@@ -196,7 +220,7 @@ func (a *App) columnEvent(click, form string, values map[string]json.RawMessage)
 		}
 		next := a.hidden
 		next[layout] = 0
-		if err := a.saveColumns(next); err != nil {
+		if err := a.saveColumnState(next, resetColumnWidths(a.widths, layout)); err != nil {
 			return true, "", err
 		}
 		return true, "reload", nil
@@ -229,4 +253,24 @@ func (a *App) columnEvent(click, form string, values map[string]json.RawMessage)
 		return true, "reload", nil
 	}
 	return false, "", nil
+}
+
+func validColumnWidth(width float32) bool { return width >= 32 && width <= 1200 }
+func copyColumnWidths(widths [3]map[string]float32) [3]map[string]float32 {
+	var out [3]map[string]float32
+	for layout, fields := range widths {
+		if fields != nil {
+			out[layout] = map[string]float32{}
+			for key, w := range fields {
+				out[layout][key] = w
+			}
+		}
+	}
+	return out
+}
+
+func resetColumnWidths(widths [3]map[string]float32, layout sessionLayout) [3]map[string]float32 {
+	out := copyColumnWidths(widths)
+	out[layout] = nil
+	return out
 }

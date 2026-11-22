@@ -75,9 +75,9 @@ def package(root=ROOT, output=None):
     assert 0 < icon_file.stat().st_size <= 2_000_000, 'Browser icon exceeds 2 MB'
 
     assert re.search(r'const addonVersion = "'+re.escape(version)+r'"', (root/'source/main.go').read_text(encoding='utf-8'))
-    files = [root/name for name in ('swofty.json','README.md','CHANGELOG.md','LICENSE','THIRD_PARTY_NOTICES.md','bin/telemetry-live.exe','bin/telemetry-live.dll','bin/telemetry-live-linux','source/go.mod')]
-    for folder, extensions in (('source',{'.go','.py'}),('native',{'.h','.hpp','.cpp','.py','.txt'})):
-        files += sorted(p for p in (root/folder).iterdir() if p.suffix in extensions and p.is_file())
+    # Installable files and required redistribution/user documentation only.
+    # Full source, build scripts and test fixtures stay in the public repository.
+    files = [root/name for name in ('swofty.json','README.md','CHANGELOG.md','LICENSE','THIRD_PARTY_NOTICES.md','DESKTOP_LICENSES.txt','bin/telemetry-live.exe','bin/telemetry-live.dll','bin/telemetry-live-linux','native/SDK-LICENSE.txt','native/SWOFTY-LAYOUTS-LICENSE.txt','native/DESKTOP-TOOLCHAIN-LICENSES.txt')]
     files.append(icon_file)
     for file in files:
         if not file.is_file(): raise SystemExit(f'Missing {file.relative_to(root)}; build the helper and native component first')

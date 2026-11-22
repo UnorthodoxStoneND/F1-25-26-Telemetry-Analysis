@@ -88,7 +88,7 @@ func (r *Reader) attach() bool {
 			file.Close()
 			continue
 		}
-		if string(mapped[:8]) != "USTLIVE2" || binary.LittleEndian.Uint32(mapped[12:]) != frameSize {
+		if string(mapped[:8]) != "USTLIVE5" || binary.LittleEndian.Uint32(mapped[12:]) != frameSize {
 			syscall.Munmap(mapped)
 			file.Close()
 			continue

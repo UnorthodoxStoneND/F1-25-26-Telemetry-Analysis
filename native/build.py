@@ -24,6 +24,10 @@ output = root / '.verify/native'
 output.mkdir(parents=True, exist_ok=True)
 (root / 'bin').mkdir(exist_ok=True)
 common = [str(compiler), '/nologo', '/std:c++20', '/EHsc', '/O2', '/MT', '/W4', '/WX', '/I'+str(root/'native')]
+subprocess.run(common + [str(root/'native/outlap_test.cpp'), '/Fo'+str(output/'outlap_test.obj'),
+                        '/Fe'+str(output/'outlap_test.exe'), '/link', '/Brepro'], env=env, cwd=output, check=True)
+if not args.build_only:
+    subprocess.run([str(output/'outlap_test.exe')], check=True, timeout=30)
 if not args.tests_only:
     dll_flags = [flag for flag in common if flag != '/MT'] + ['/MD']
     subprocess.run(dll_flags + ['/LD', str(root/'native/telemetry.cpp'), '/Fo'+str(output/'telemetry.obj'),
@@ -33,10 +37,6 @@ subprocess.run(common + [str(root/'native/readers_test.cpp'), '/Fo'+str(output/'
                         '/Fe'+str(output/'readers_test.exe'), '/link', '/Brepro'], env=env, cwd=output, check=True)
 if not args.build_only:
     subprocess.run([str(output/'readers_test.exe'), str(output/'frame.bin')], check=True, timeout=30)
-subprocess.run(common + [str(root/'native/stint_test.cpp'), '/Fo'+str(output/'stint_test.obj'),
-                        '/Fe'+str(output/'stint_test.exe'), '/link', '/Brepro'], env=env, cwd=output, check=True)
-if not args.build_only:
-    subprocess.run([str(output/'stint_test.exe')], check=True, timeout=30)
 subprocess.run(common + [str(root/'native/binding_test.cpp'), '/Fo'+str(output/'binding_test.obj'),
                         '/Fe'+str(output/'binding_test.exe'), '/link', '/Brepro'], env=env, cwd=output, check=True)
 if not args.build_only:
@@ -65,4 +65,6 @@ if not args.tests_only:
         subprocess.run([str(output/'publisher_test.exe'),str(output/'swofty_core.dll'),str(root/'bin/telemetry-live.dll')], check=True, timeout=30)
         subprocess.run([str(output/'publisher_test.exe'),str(output/'swofty_core.dll'),str(root/'bin/telemetry-live.dll'),'verified'], check=True, timeout=30)
         subprocess.run([str(output/'publisher_test.exe'),str(output/'swofty_core.dll'),str(root/'bin/telemetry-live.dll'),'current'], check=True, timeout=30)
+        for build in ('verified','current'):
+            subprocess.run([str(output/'publisher_test.exe'),str(output/'swofty_core.dll'),str(root/'bin/telemetry-live.dll'),build,'missing-screen'], check=True, timeout=30)
 print('PASS: native CI artifacts compiled; tests run separately' if args.build_only else 'PASS: native readers, session lifecycle and wire ABI; no game launched')

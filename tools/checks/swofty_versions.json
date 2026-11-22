@@ -1,7 +1,7 @@
 {
   "repository": "Swofty-Developments/SwoftyLauncher",
   "minimum": {
-    "tag": "v1.9.80",
-    "commit": "3088ab289541d277b8ad6ae7b9ae1b88e4440c92"
+    "tag": "v1.10.9",
+    "commit": "3a56df3eb251f94eca534c82a5d8f1d3d12d13ab"
   }
 }

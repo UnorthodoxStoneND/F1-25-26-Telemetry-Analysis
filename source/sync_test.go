@@ -116,13 +116,13 @@ func TestTelemetryAndBadgesCommitTogether(t *testing.T) {
 func TestBadgesWaitForRowTelemetry(t *testing.T) {
 	a := App{frame: grid(), mode: "full", status: "Live"}
 	c := &a.frame.Cars[0]
-	c.Known &^= knownTyre
+	c.Known &^= knownName
 	a.lastView, a.viewSent = a.viewState(), true
 	c.BadgePNG = testBadgePNG(t)
 	if badgeCell(*c) != "" || a.needsView() {
 		t.Fatal("badge appeared before row telemetry")
 	}
-	c.Known |= knownTyre
+	c.Known |= knownName
 	if !a.needsView() || badgeCell(*c) == "" {
 		t.Fatal("ready row did not show its badge with telemetry")
 	}

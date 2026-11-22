@@ -94,6 +94,58 @@ void test_badges(const char* output) {
 
 int main(int argc,char** argv) {
  test_badges(argc>1?argv[1]:nullptr);
+ {
+  BindingFixture f(32);directlive::Context context;livewire::Frame frame{};
+  auto fill=[&]{return context.fill(f.memory,f.sites,frame,&f.live,&f.ops);};
+  auto& d=f.details[0];
+  d.laps_completed=9;d.tyre_age_laps=17;d.tyre_stint_laps=2;
+  d.last_lap_ms=81000;d.best_lap_ms=80000;
+  const uint32_t last[]={21000,30000,30000},best[]={22000,29000,29000};
+  std::memcpy(d.last_sector_ms,last,sizeof last);std::memcpy(d.best_sector_ms,best,sizeof best);
+  // Last may be invalid; v6's best is already the best valid lap. Preserve
+  // both triplets from their own records, never mix minima or current sectors.
+  d.lap_flags=0;d.current_lap_ms=1000;d.current_sector_ms[0]=500;
+  assert(fill()&&frame.count==32);
+  auto c=frame.cars[0];
+  assert(c.laps==9&&c.tyre_age_laps==17&&c.last_ms==81000&&c.best_ms==80000);
+  assert(c.best_sectors[0]==22000&&c.last_sectors[0]==21000);
+  assert((c.known&(livewire::LAST_SECTORS|livewire::BEST_SECTORS))==(livewire::LAST_SECTORS|livewire::BEST_SECTORS));
+  d.tyre_age_laps=0;assert(fill()&&(frame.cars[0].known&livewire::TYRE_AGE)&&!frame.cars[0].tyre_age_laps);
+  d.tyre_age_laps=255;assert(fill()&&frame.cars[0].tyre_age_laps==255);
+  d.tyre_wear[0]=std::numeric_limits<float>::quiet_NaN();d.tyre_wear[1]=101;
+  assert(fill()&&frame.cars[0].wear_known==12);
+  d.last_sector_ms[0]=1;d.best_lap_ms=3600000;
+  assert(fill()&&(frame.cars[0].known&livewire::LAST)&&!(frame.cars[0].known&(livewire::LAST_SECTORS|livewire::BEST)));
+  d.have=0;assert(fill());c=frame.cars[0];
+  assert(!(c.known&(livewire::GRID|livewire::TYRE_AGE|livewire::LAPS|livewire::LAST|livewire::BEST))&&!c.wear_known);
+  for(unsigned malformed=0;malformed<4;malformed++) {
+   d=f.details[1];d.vehicle=0;
+   if(malformed==0)d.version=0;
+   if(malformed==1)d.size=sizeof d-1;
+   if(malformed==2)d.vehicle=1;
+   if(malformed==3)f.detail_result=SWOFTY_ASSET_UNAVAILABLE;
+   assert(fill()&&!(frame.cars[0].known&livewire::TYRE_AGE)&&frame.cars[0].position==1);
+  }
+  f.detail_result=SWOFTY_ASSET_OK;f.live.version=5;assert(!fill());
+  f.live.version=6;f.live.car_detail=nullptr;assert(!fill());
+  f.live.car_detail=BindingFixture::read_detail;f.changing=true;assert(!fill());
+ }
+ {
+  BindingFixture f(22);directlive::Context context;livewire::Frame frame{};
+  auto fill=[&]{return context.fill(f.memory,f.sites,frame,&f.live,&f.ops);};
+  // IDs come from the active GameDB: cover F2 and add-on definitions rather
+  // than substituting an F1-only allowlist. 0xff remains the unknown sentinel.
+  for(unsigned id=0;id<255;id++) {
+   f.live_cars[0].tyre_actual=uint8_t(id);f.live_cars[0].tyre_visual=uint8_t(254-id);
+   assert(fill()&&frame.count==22&&(frame.cars[0].known&livewire::TYRES));
+   assert(frame.cars[0].compound==int(id)&&frame.cars[0].visual==int(254-id));
+  }
+  f.live_cars[0].tyre_visual=255;assert(fill()&&!(frame.cars[0].known&livewire::TYRES));
+  f.live_cars[0].tyre_visual=10;f.live_cars[0].tyre_actual=255;
+  assert(fill()&&!(frame.cars[0].known&livewire::TYRES));
+  f.live_cars[0].tyre_actual=10;f.live_cars[0].have&=~SWOFTY_LIVE_HAVE_TYRE;
+  assert(fill()&&!(frame.cars[0].known&livewire::TYRES));
+ }
  for(unsigned count:{4u,24u,32u}) {
   BindingFixture f(count);directlive::Context context;livewire::Frame frame{};
   // Car objects have no legacy locks, controller, tyre, brake or fuel chains.
@@ -101,7 +153,7 @@ int main(int argc,char** argv) {
   unsigned legacy_reads=0;
   auto read=[&](uint64_t at,void* out,size_t n) {
    for(unsigned id=0;id<count;id++)
-    if(at==f.cars[id]+0x98||at==f.cars[id]+0x380||at==f.cars[id]+0x550||at==f.cars[id]+0x540||at==f.results[id]+0x48)
+    if(at==f.cars[id]+0x98||at==f.cars[id]+0x380||at==f.cars[id]+0x550||at==f.cars[id]+0x540||at==f.cars[id]+0x900)
      legacy_reads++;
    return f.memory(at,out,n);
   };
@@ -115,13 +167,33 @@ int main(int argc,char** argv) {
    assert(c.setup_known==(1u<<21)-1&&c.setup[14]==98&&c.setup[15]==58&&c.setup[20]==50&&c.wear_known==15);
   }
   assert(legacy_reads==0);
+  // Pending queues and the separately available classification time total.
+  f.live_cars[0].have|=SWOFTY_LIVE_HAVE_PENALTIES;
+  f.live_cars[0].time_penalty_s=99;f.live_cars[0].warnings=10;
+  f.live_cars[0].drive_through=2;f.live_cars[0].stop_go=1;
+  assert(fill()&&(frame.cars[0].known&livewire::PENALTIES));
+  assert(frame.cars[0].drive_through==2&&frame.cars[0].stop_go==1);
+  assert((frame.cars[0].known&livewire::TIME_PENALTY)&&frame.cars[0].time_penalty_ms==99000);
+  f.live_cars[0].time_penalty_s=5.25f;
+  assert(fill()&&frame.cars[0].time_penalty_ms==5250);
+  f.live_cars[0].time_penalty_s=std::numeric_limits<float>::quiet_NaN();
+  assert(fill()&&!(frame.cars[0].known&livewire::TIME_PENALTY));
+  f.live_cars[0].time_penalty_s=0;
+  assert(fill()&&(frame.cars[0].known&livewire::TIME_PENALTY)&&!frame.cars[0].time_penalty_ms);
+
+  f.live_cars[0].drive_through=0;f.live_cars[0].stop_go=0;
+  assert(fill()&&(frame.cars[0].known&livewire::PENALTIES)&&!frame.cars[0].drive_through&&!frame.cars[0].stop_go);
+  f.live_cars[0].have&=~SWOFTY_LIVE_HAVE_PENALTIES;
+  f.live_cars[0].drive_through=3;f.live_cars[0].stop_go=2;
+  assert(fill()&&!(frame.cars[0].known&livewire::PENALTIES)&&!frame.cars[0].drive_through&&!frame.cars[0].stop_go);
+
   f.live_cars[0].have|=SWOFTY_LIVE_HAVE_PROGRESS|SWOFTY_LIVE_HAVE_GAP_AHEAD;
-  f.live_cars[0].lap=0;f.live_cars[0].gap_ahead_ms=0;
+  f.details[0].laps_completed=0;f.live_cars[0].lap=99;f.live_cars[0].gap_ahead_ms=0;
   assert(fill()&&(frame.cars[0].known&livewire::LAPS)&&(frame.cars[0].known&livewire::GAP_AHEAD));
   assert(!frame.cars[0].laps&&!frame.cars[0].gap_ahead_ms);
-  f.live_cars[0].lap=7;f.live_cars[0].gap_ahead_ms=1234;
+  f.details[0].laps_completed=7;f.live_cars[0].gap_ahead_ms=1234;
   assert(fill()&&frame.cars[0].laps==7&&frame.cars[0].gap_ahead_ms==1234);
-  f.live_cars[0].lap=-1;f.live_cars[0].gap_ahead_ms=-1;
+  f.details[0].laps_completed=1000;f.live_cars[0].gap_ahead_ms=-1;
   assert(fill()&&!(frame.cars[0].known&(livewire::LAPS|livewire::GAP_AHEAD)));
   // Names are the launcher's UTF-8 display names, without splitting or reformatting.
   f.names[0]="Pérez";f.names[f.player]="Custom Player";
@@ -175,6 +247,25 @@ int main(int argc,char** argv) {
   assert(fill()&&frame.count==24&&frame.cars[1].vehicle==2);
   f.live_cars[2].have&=~SWOFTY_LIVE_HAVE_IDENT;
   assert(fill()&&frame.count==23&&frame.cars[1].vehicle==3);
+ }
+ {
+  BindingFixture f(25);directlive::Context context;livewire::Frame frame{};
+  f.live_cars[24].flags=0; // safety car can appear in an input order, never the view
+  auto fill=[&]{return context.fill(f.memory,f.sites,frame,&f.live,&f.ops);};
+  auto order=[&]{f.header.have|=SWOFTY_LIVE_SHAVE_ORDER;f.header.classified=25;for(unsigned i=0;i<25;i++)f.header.order[i]=24-i;};
+  order();assert(fill()&&frame.count==24&&(frame.state&livewire::CLASSIFICATION_ORDER));
+  for(unsigned i=0;i<24;i++)assert(frame.cars[i].vehicle==23-i);
+  // Partial / duplicate / out-of-range / oversized / absent orders do not
+  // mutate the field and leave the helper's existing sort as the fallback.
+  f.header.classified=10;assert(fill()&&!(frame.state&livewire::CLASSIFICATION_ORDER)&&frame.cars[0].vehicle==0);
+  order();f.header.order[1]=f.header.order[2];assert(fill()&&!(frame.state&livewire::CLASSIFICATION_ORDER));
+  order();f.header.order[1]=32;assert(fill()&&!(frame.state&livewire::CLASSIFICATION_ORDER));
+  order();f.header.classified=33;assert(fill()&&!(frame.state&livewire::CLASSIFICATION_ORDER));
+  order();f.header.have&=~SWOFTY_LIVE_SHAVE_ORDER;assert(fill()&&!(frame.state&livewire::CLASSIFICATION_ORDER));
+  order();f.handle_results[2]=SWOFTY_ASSET_LATE;
+  assert(fill()&&frame.count==23&&(frame.state&livewire::CLASSIFICATION_ORDER));
+  for(unsigned i=0;i<frame.count;i++)assert(frame.cars[i].vehicle!=2&&frame.cars[i].vehicle!=24);
+  f.changing=true;assert(!fill()&&!frame.count); // shared snapshot generation guard
  }
  std::cout<<"PASS: Live State and CarOps routing, no legacy reads, display names, partial/malformed data and stale handles\n";
 }
