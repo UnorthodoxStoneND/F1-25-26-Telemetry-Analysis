@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def build(target):
     output = '../bin/telemetry-live.exe' if target == 'windows' else '../bin/telemetry-live-linux'
     (ROOT/'bin').mkdir(exist_ok=True)
-    settings = dict(CGO_ENABLED='1', GOOS=target, GOARCH='amd64', GOTOOLCHAIN=os.environ.get('RETRO_GO_TOOLCHAIN','go1.24.5'))
+    settings = dict(CGO_ENABLED='1', GOOS=target, GOARCH='amd64', GOTOOLCHAIN=os.environ.get('RETRO_GO_TOOLCHAIN','go1.27.4'))
     args = ['build','-tags','desktop','-buildvcs=false','-trimpath']
     if target == 'windows':
         settings['CC'] = 'x86_64-w64-mingw32-gcc'
