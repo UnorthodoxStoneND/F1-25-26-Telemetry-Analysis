@@ -55,7 +55,7 @@ See [compatibility and testing](https://github.com/UnorthodoxStoneND/F1-25-26-Te
 
 ## Contributing
 
-Use Go **1.24 or later** (CI uses 1.27.4), Python and the Visual Studio C++ x64 build tools. From the repository root:
+Use the pinned Go **1.27.4** helper toolchain (matching CI), Python and the Visual Studio C++ x64 build tools. From the repository root:
 
 ```powershell
 go -C source vet ./...

@@ -2,7 +2,7 @@
 
 ## Build and package
 
-Use Go **1.24 or later** (CI remains pinned to 1.27.4), the Visual Studio C++ x64 build tools and an Ubuntu 24.04/WSL desktop build environment. The local release build uses Go 1.24.5. Install `golang-go gcc-mingw-w64-x86-64 libgl1-mesa-dev xorg-dev libxkbcommon-dev pkg-config` in Ubuntu. From the add-on root:
+Use Go **1.24 or later** (CI remains pinned to 1.27.4), the Visual Studio C++ x64 build tools and an Ubuntu 24.04/WSL desktop build environment. The helper build script defaults to the pinned Go 1.27.4 production toolchain, matching CI; Go selects/downloads it when needed. The earlier local prototype used Go 1.24.5. Install `golang-go gcc-mingw-w64-x86-64 libgl1-mesa-dev xorg-dev libxkbcommon-dev pkg-config` in Ubuntu. From the add-on root:
 
 ```powershell
 python native/build.py
@@ -10,7 +10,7 @@ python source/build_helper.py --target both
 python source/package.py
 ```
 
-The Go helper retains symbols and uncompressed DWARF debug information (`-ldflags="-compressdwarf=false"`); path trimming removes local build paths. The helper uses the console subsystem, hidden by Swofty during normal use. The native DLL uses /MD and the same VC++ v14 x64 runtime family as Swofty. A separate /MT host checks real runtime loading and its missing-dependency diagnostic. Create the installable ZIP with `python source/package.py`. Antivirus results for earlier 0.4.x releases do not cover this executable or DLL.
+The Go helper retains symbols and uncompressed DWARF debug information (`-ldflags="-compressdwarf=false"`); path trimming removes local build paths. The helper uses the console subsystem, hidden by Swofty during normal use. The Windows EXE uses the supplied artwork in `source/exe_icon.png`; the launcher and retro window retain the existing artwork from `icon.png`. Its Windows icon uses a conventional ICO with 32-bit DIBs at 16/32/48 pixels and a 32-bit RGBA PNG at 256 pixels. The resource compiler builds the ICO into a COFF resource object, which is linked into the EXE as standard Windows icon resources. The native DLL uses /MD and the same VC++ v14 x64 runtime family as Swofty. A separate /MT host checks real runtime loading and its missing-dependency diagnostic. Create the installable ZIP with `python source/package.py`. Antivirus results for earlier 0.4.x releases do not cover this executable or DLL.
 
 Distributable helpers require `-tags desktop` and `CGO_ENABLED=1`; the build script sets these explicitly. Untagged builds intentionally retain a headless entry point for protocol/acquisition tests and must not replace the packaged helpers. Windows links only system graphics/runtime DLLs, without a WebView. Linux uses PIE (`-buildmode=pie`) for address randomization, retains uncompressed debug sections and links the system OpenGL/X11/libc stack; the Linux build targets Ubuntu 24.04 rather than promising compatibility with older distributions. The same helper process owns the protocol loop and optional window. Its UI receives copied presentation values through a bounded channel; only the protocol loop owns the reader and preference state.
 

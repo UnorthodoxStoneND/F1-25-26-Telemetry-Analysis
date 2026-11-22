@@ -78,7 +78,19 @@ def main():
     assert len(icons)==4 and len(groups)==1, 'Missing Windows executable icon resources'
     assert struct.unpack_from('<HHH',groups[0])==(0,1,4), 'Icon group must include four sizes'
     desktop_icon=(ROOT/'source/retro_icon.png').read_bytes()
-    assert desktop_icon in icons, 'Executable and window icon differ'
+    assert desktop_icon not in icons, 'Executable must use its separate custom icon'
+    assert desktop_icon in (ROOT/'bin/telemetry-live.exe').read_bytes(), 'Windows window artwork missing'
+    icon_sizes=[]
+    for data in icons:
+        if data[:8]==b'\x89PNG\r\n\x1a\n':
+            assert struct.unpack_from('>II',data,16)==(256,256) and data[24:26]==b'\x08\x06','Large icon must be a 32-bit RGBA PNG'
+            icon_sizes.append(256)
+        else:
+            header,width,height,planes,bits=struct.unpack_from('<IiiHH',data)
+            assert header==40 and width in (16,32,48) and height==width*2 and planes==1 and bits==32,'Small icons must be standard 32-bit DIBs'
+            assert len(data)==40+width*width*4+((width+31)//32*4)*width,'DIB pixel/mask length mismatch'
+            icon_sizes.append(width)
+    assert sorted(icon_sizes)==[16,32,48,256],'Missing or duplicated icon sizes'
     assert desktop_icon in elf, 'Linux window icon missing'
 
     assert exe['subsystem']==3,'Helper must retain the tested console subsystem'
