@@ -1,6 +1,6 @@
-# F1 25/26 Live Telemetry [Swofty Add-On]
+# F1 Live Telemetry & Analysis [Swofty Add-On]
 
-Live telemetry and car setups for F1 25 and the 2026 Season Pack, including My Team. Version **0.6.0** adds an optional standalone retro window to the existing launcher page. Live-only: no UDP configuration, recording or post-session analysis.
+Live telemetry and car setups for F1 25 and the 2026 Season Pack, including My Team. The **0.7.0-prototype** adds optional weekend recording and a Telemetry Analysis page alongside the launcher live table and standalone retro window.
 
 ## Features
 
@@ -31,13 +31,19 @@ Live telemetry and car setups for F1 25 and the 2026 Season Pack, including My T
 - Per-profile session-view switches and a header Columns selector with saved field visibility for each session group.
 - Full-grid or nearby-driver views, optional player highlighting and a resizable table.
 - Preserve the helper build settings from main: uncompressed debug information and Linux PIE/ASLR, alongside the retro desktop renderer.
-- Data from Swofty's Live State API and checked native game bindings, with bounded shared memory and no telemetry recordings or uploads.
+- Data from Swofty's Live State API and checked native game bindings, with bounded shared memory. Recordings stay on your machine.
 
 See the [live-data reference](https://github.com/UnorthodoxStoneND/F1-25-26-Telemetry-Analysis/blob/main/docs/reference/live-data.md) for display behaviour, supported readings and process details.
 
+## Telemetry Analysis prototype
+
+Turn on **Enable Telemetry Analysis** in the add-on settings before starting a session. The helper records practice, qualifying, sprint qualifying, sprint and race data even when another launcher page or the retro display is open. After a session, choose it on the **Telemetry Analysis** launcher page. Practice sessions include a circuit banner and driver rankings. **Export raw data** copies the selected recording to the Exports folder and opens it.
+
+Recordings use CSV in **F1 Live Telemetry** under your system Documents folder. See [recordings and exports](docs/reference/analysis.md) for file contents and prototype limits.
+
 ## Install
 
-Download **`F1_Telemetry_v0.6.0.zip`** from [GitHub Releases](https://github.com/UnorthodoxStoneND/F1-25-26-Telemetry-Analysis/releases/tag/v0.6.0), or install the same version through Swofty once its browser submission is approved. In Swofty, open **Addons** and select **Install addon from computer**. Enable **F1 Live Telemetry** in the active profile and restart Swofty and the game after updating. The default display is **Launcher page**; choose **Retro window** under **Telemetry display** to use the standalone window. Only the selected mode displays telemetry.
+For phase-one testing, install **`F1_Telemetry_v0.7.0-prototype.zip`**. The published version is available from [GitHub Releases](https://github.com/UnorthodoxStoneND/F1-25-26-Telemetry-Analysis/releases) or the Swofty Addon Browser. In Swofty, open **Addons** and select **Install addon from computer**. Enable **F1 Live Telemetry & Analysis** in the active profile and restart Swofty and the game after updating. The default display is **Launcher page**; choose **Retro window** under **Telemetry display** to use the standalone window. Only the selected mode displays telemetry.
 
 The native DLL uses the same Microsoft Visual C++ v14 x64 runtime family as Swofty Launcher. If a runtime dependency is missing, install or repair [Microsoft's official x64 runtime](https://aka.ms/vc14/vc_redist.x64.exe).
 
@@ -51,7 +57,7 @@ Follow the [installation guide](https://github.com/UnorthodoxStoneND/F1-25-26-Te
 - Swofty 1.10.9 and compatible later versions retaining the required APIs.
 - F1 25 on Steam, including the 2026 Season Pack and My Team, on the supported game layouts.
 
-See [compatibility and testing](https://github.com/UnorthodoxStoneND/F1-25-26-Telemetry-Analysis/blob/main/docs/reference/compatibility.md) for the exact requirements and verification limits. For recording and post-session analysis, keep version 0.4.2; this version leaves existing recordings untouched.
+See [compatibility and testing](https://github.com/UnorthodoxStoneND/F1-25-26-Telemetry-Analysis/blob/main/docs/reference/compatibility.md) for the exact requirements and verification limits. Earlier 0.4.x recordings remain in their original format and location.
 
 ## Contributing
 

@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def is_test(version):
-    return re.search(r'^\d+\.\d+\.\d+-test(?:[.+-]|$)', version) is not None
+    return re.search(r'^\d+\.\d+\.\d+-(?:test|prototype)(?:[.+-]|$)', version) is not None
 
 
 def default_output(root, version):

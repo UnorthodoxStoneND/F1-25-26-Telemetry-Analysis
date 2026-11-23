@@ -63,7 +63,7 @@ See [CI validation](../../tools/checks/README.md) for the shared-artifact pipeli
 | `CHANGELOG.md` | Version history |
 | `bin/`, `dist/`, `.verify/` | Ignored build, package and verification output |
 
-Keep runtime code live-only: no UDP receiver or fallback, recording, post-session analysis or generated telemetry charts. Team badges may be converted to PNG in memory for launcher table cells; do not write badge image files. Do not commit game files, extracted assets, recordings or local build paths.
+Use Swofty Live State and verified launcher-provided bindings for acquisition. Keep the optional analytics recorder in the Go helper and use the published shared snapshot. Gameplay hooks and UDP receivers are outside the add-on scope. Team badges may be converted to PNG in memory for launcher table cells; do not write badge image files. Do not commit game files, extracted assets, recordings or local build paths.
 
 ## Linux helper validation
 

@@ -1,5 +1,12 @@
 # F1 Telemetry changelog
 
+## 0.7.0-prototype — 2026-11-23
+
+- Renamed the add-on to F1 Live Telemetry & Analysis with the same add-on ID.
+- Added opt-in local CSV recording of supported weekend sessions from Swofty Live State. Background recording works with either live display.
+- Added a Telemetry Analysis launcher page with saved-session selection, practice rankings and raw CSV export.
+- Switched retro session visibility to the launcher's existing lifecycle and flow signals.
+
 ## 0.6.0 — 2026-11-21
 
 - Preserve main’s helper build fixes: uncompressed symbols/DWARF on both platforms and Linux PIE/ASLR, with explicit binary-contract checks.

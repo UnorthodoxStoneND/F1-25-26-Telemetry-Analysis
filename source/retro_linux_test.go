@@ -4,8 +4,10 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -27,16 +29,24 @@ func TestDesktopBackgroundStartupAndShutdown(t *testing.T) {
 		}
 	}
 	put64(32, 100)
+	put64(analysisOffset, 123)
+	put64(analysisOffset+8, 1)
+	put64(analysisOffset+16, 100)
+	if _, err := file.WriteAt([]byte{1, 0, 0, 0}, 52); err != nil {
+		t.Fatal(err)
+	}
 	binary.LittleEndian.PutUint32(bytes[40:], binary.LittleEndian.Uint32(bytes[40:])|windowReady)
 	if _, err := file.WriteAt(bytes[40:44], 40); err != nil {
 		t.Fatal(err)
 	}
 	root := t.TempDir()
 	data := filepath.Join(root, "addon-data", addonID)
+	t.Setenv("HOME", root)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(root, "config"))
 	if err := os.MkdirAll(filepath.Join(root, "profiles"), 0700); err != nil {
 		t.Fatal(err)
 	}
-	options, _ := json.Marshal(M{"options": M{addonID: M{"display_mode": "window", "drivers_shown": "full"}}})
+	options, _ := json.Marshal(M{"options": M{addonID: M{"display_mode": "window", "drivers_shown": "full", "enable_analysis": true}}})
 	if err := os.WriteFile(filepath.Join(root, "profiles", "main.json"), options, 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +87,7 @@ func TestDesktopBackgroundStartupAndShutdown(t *testing.T) {
 	bridge.act(desktopAction{Kind: "dismiss"})
 	await(func(m retroModel) bool { return !m.Show })
 	// A real end hides the window and EOF terminates the helper's owner loop.
-	binary.LittleEndian.PutUint32(bytes[40:], 32)
+	binary.LittleEndian.PutUint32(bytes[40:], sessionEnded)
 	if _, err := file.WriteAt(bytes[40:44], 40); err != nil {
 		t.Fatal(err)
 	}
@@ -90,5 +100,22 @@ func TestDesktopBackgroundStartupAndShutdown(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("helper survived EOF")
+	}
+	saved := 0
+	err = filepath.WalkDir(filepath.Join(root, "Documents", analysisFolder, "Recordings"), func(path string, d fs.DirEntry, err error) error {
+		if err == nil && d.Name() == "session.csv" {
+			rows, readErr := readAnalysisCSV(filepath.Dir(path), d.Name(), sessionCSV, 1)
+			if readErr != nil {
+				return readErr
+			}
+			if len(rows) != 1 || rows[0][11] != "ended" || !strings.Contains(rows[0][6], "Practice") {
+				t.Fatalf("background session was not saved: %v", rows)
+			}
+			saved++
+		}
+		return err
+	})
+	if err != nil || saved != 1 {
+		t.Fatalf("expected one background recording, got %d: %v", saved, err)
 	}
 }

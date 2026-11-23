@@ -8,6 +8,10 @@ The 0.6.0 standalone window adds a Fyne desktop frontend to the existing helper.
 
 Automated checks cover the live readers, Live State/CarOps acquisition, session transitions, completed lap timing, tyre-pressure wheel order, shared-memory format and launcher views. In-game testing confirmed setup values display for all cars, with the player's values checked against the game. Resource improvements have not been measured across every supported build.
 
+## Phase-one prototype
+
+Use the Steam edition on Windows for in-game sign-off, preferably with Swofty 1.10.33 or a compatible later version. Later optional career services can supply a save ID and current round. With those unavailable, the recorder groups by launcher profile, game launch and circuit. Linux remains experimental. The prototype requires in-game validation of capture, export, game-mode coverage and retro window transitions.
+
 ## Release verification: 0.6.0
 
 0.6.0 promotes the runtime behaviour of 0.6.0-test.26. On 21 November 2026 the user reported everything working after the OUT-status and within-session tyre-age checklist. Earlier user reports covered all three views, saved preferences, F2 images, session/window transitions and Flashback. These are user-reported in-game results, not an independent agent run or an exhaustive per-feature test matrix. The launcher version and exact game build for the final user run were not supplied. The installed launcher observed during the preceding tyre-age investigation was 1.10.9; the required API is Live State v6.

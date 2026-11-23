@@ -10,27 +10,6 @@ struct Session {
     Frame frame{};
     bool ended=false,paused=false,entered=false,permitted=false,gameplay=false;
     uint64_t serial=1;
-    // This career rewards container includes the post-weekend Finances page.
-    // It opens before StateSession exits, while the old cars are still readable.
-    // Results/standings screens deliberately do not clear the trackside latch.
-    bool screen(const char* name) {
-        if(!name || std::strcmp(name,"slice_rewards_career_pagination")) return false;
-        const bool changed=gameplay;
-        gameplay=false;
-        return changed;
-    }
-    template<class Read> bool opened_screen(Read read,uint64_t screen_at) {
-        uint64_t text=0;
-        if(!screen_at || !read(screen_at+0x68,&text,sizeof text) || !text) return false;
-        // Vm_Open_Screen's NeString uses the same +9 characters as core ui.cpp.
-        // Bound and protect every read; a missing/malformed name changes nothing.
-        char name[96]{};
-        for(size_t i=0;i<sizeof name;i++) {
-            if(!read(text+9+i,&name[i],1)) return false;
-            if(!name[i]) return screen(name);
-        }
-        return false;
-    }
     void clear(bool end) { frame=Frame{}; frame.player=-1; frame.state=end?ENDED:0; ended=end; paused=false; entered=!end; permitted=false; gameplay=false; ++serial; }
     // Career's trackside workstation is a child of StateSession too. A start
     // callback and readable cars alone therefore cannot authorise the display.
@@ -66,7 +45,7 @@ struct Session {
         else if(!std::strcmp(name,"resume")) paused=false;
     }
     void stamp(uint64_t now) {
-        std::memcpy(frame.magic,"USTLIVE5",8); frame.version=VERSION; frame.size=sizeof(Frame);
+        std::memcpy(frame.magic,"USTLIVE6",8); frame.version=VERSION; frame.size=sizeof(Frame);
         frame.session=serial; frame.tick_ms=now;
         if(gameplay && permitted && (frame.state&ACTIVE)) frame.state|=WINDOW_READY; else frame.state&=~WINDOW_READY;
         if(paused && (frame.state&ACTIVE)) frame.state|=PAUSED; else frame.state&=~PAUSED;

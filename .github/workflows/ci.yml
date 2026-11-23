@@ -110,7 +110,7 @@ jobs:
             check: protocol
           - name: Live memory bounds
             check: memory
-          - name: Live-only acquisition policy
+          - name: Live State acquisition policy
             check: policy
           - name: Native game readers
             check: readers

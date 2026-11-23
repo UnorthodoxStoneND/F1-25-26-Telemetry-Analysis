@@ -14,7 +14,7 @@ int main() {
         protontransport::Mapping mapping;assert(mapping.create(path));
         auto* live=static_cast<livewire::Frame*>(mapping.view);
         auto* images=reinterpret_cast<badgewire::Frame*>(static_cast<char*>(mapping.view)+sizeof(*live));
-        std::memcpy(live->magic,"USTLIVE5",8);live->size=sizeof(*live);live->session=42;
+        std::memcpy(live->magic,"USTLIVE6",8);live->size=sizeof(*live);live->session=42;
         std::memcpy(images->magic,"USTBADG2",8);images->size=sizeof(*images);images->session=42;
         // A second read-only mapping sees the same backing bytes and both frames.
         HANDLE file=CreateFileW(path,GENERIC_READ,FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE,
