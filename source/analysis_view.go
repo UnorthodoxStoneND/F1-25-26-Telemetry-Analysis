@@ -23,10 +23,11 @@ type analysisPage struct {
 
 type analysisEntry struct {
 	key, dir, profile, track, label, started, state, coverage string
+	schema                                                    string
 	practice                                                  bool
 }
 
-var analysisFiles = []string{"session.csv", "drivers.csv", "laps.csv", "samples.csv"}
+var analysisFiles = []string{"session.csv", "drivers.csv", "laps.csv", "samples.csv", flagsFileName}
 
 func readAnalysisCSV(dir, name string, header []string, limit int) ([][]string, error) {
 	file, err := os.Open(filepath.Join(dir, name))
@@ -64,7 +65,7 @@ func (a *analysisCapture) entries() ([]analysisEntry, error) {
 		}
 		dir := filepath.Dir(path)
 		rows, err := readAnalysisCSV(dir, "session.csv", sessionCSV, 1)
-		if err != nil || len(rows) != 1 || rows[0][0] != "1" {
+		if err != nil || len(rows) != 1 || (rows[0][0] != "1" && rows[0][0] != analysisSchema) {
 			return nil
 		}
 		row := rows[0]
@@ -77,7 +78,7 @@ func (a *analysisCapture) entries() ([]analysisEntry, error) {
 		}
 		key, _ := filepath.Rel(root, dir)
 		typeID, _ := strconv.Atoi(row[7])
-		list = append(list, analysisEntry{key: filepath.ToSlash(key), dir: dir, profile: row[1], track: row[5],
+		list = append(list, analysisEntry{key: filepath.ToSlash(key), dir: dir, schema: row[0], profile: row[1], track: row[5],
 			label: row[6], started: row[9], state: state, coverage: row[13], practice: typeID >= 1 && typeID <= 4 || typeID == 0 && row[8] == "1"})
 		return nil
 	})
@@ -271,9 +272,13 @@ func exportAnalysis(root string, entry analysisEntry) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	for _, name := range analysisFiles {
+	files := analysisFiles
+	if entry.schema == "1" {
+		files = files[:len(files)-1] // Legacy recordings have four files.
+	}
+	for _, name := range files {
 		if err := copyAnalysisFile(filepath.Join(entry.dir, name), filepath.Join(dir, name)); err != nil {
-			for _, file := range analysisFiles {
+			for _, file := range files {
 				_ = os.Remove(filepath.Join(dir, file))
 			}
 			_ = os.Remove(dir)
@@ -329,9 +334,14 @@ func analysisTeam(key string) string {
 	names := map[string]string{
 		"redbull": "Red Bull Racing", "mclaren": "McLaren", "ferrari": "Ferrari", "mercedes": "Mercedes", "alpine": "Alpine",
 		"astonmartin": "Aston Martin", "racingbulls": "Racing Bulls", "rb": "Racing Bulls", "williams": "Williams", "haas": "Haas",
-		"kicksauber": "Kick Sauber", "sauber": "Sauber", "audi": "Audi", "cadillac": "Cadillac", "myteam": "My Team",
+		"kicksauber": "Kick Sauber", "sauber": "Sauber", "audi": "Audi", "cadillac": "Cadillac", "gmcadillac": "Cadillac",
+		"myteam": "My Team", "alfaromeo": "Alfa Romeo", "alphatauri": "AlphaTauri",
 	}
-	if name := names[strings.ToLower(strings.ReplaceAll(key, "_", ""))]; name != "" {
+	lookup := strings.ToLower(key)
+	for _, suffix := range []string{"_2025", "_2026", "_25", "_26"} {
+		lookup = strings.TrimSuffix(lookup, suffix)
+	}
+	if name := names[strings.ReplaceAll(lookup, "_", "")]; name != "" {
 		return name
 	}
 	return dash(strings.ReplaceAll(key, "_", " "))
@@ -356,6 +366,7 @@ func analysisCircuit(key string) (string, string) {
 		"zandvoort": {"Netherlands", "Zandvoort"}, "imola": {"Italy", "Imola"}, "jeddah": {"Saudi Arabia", "Jeddah Corniche Circuit"},
 		"miami": {"United States", "Miami International Autodrome"}, "las_vegas": {"United States", "Las Vegas Strip Circuit"},
 		"losail": {"Qatar", "Lusail International Circuit"}, "madrid": {"Spain", "MADRING"},
+		"korea":               {"South Korea", "Korea International Circuit"},
 		"silverstone_reverse": {"United Kingdom", "Silverstone (Reverse)"}, "austria_reverse": {"Austria", "Red Bull Ring (Reverse)"},
 		"zandvoort_reverse": {"Netherlands", "Zandvoort (Reverse)"},
 	}

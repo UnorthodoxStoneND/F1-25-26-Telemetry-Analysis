@@ -15,6 +15,7 @@
 #include "badges.h"
 #include "proton_transport.h"
 #include "outlap.h"
+#include "analysis_teams.h"
 
 namespace {
 const SwoftyApi* api;
@@ -34,6 +35,8 @@ char binding_error[192]{};
 uint32_t game_stamp=0;
 directlive::Sites sites;
 directlive::Context direct_context;
+uint64_t game_mode_key=0;
+analysisteams::Labels team_labels;
 outlap::Tracker outlaps;
 sessionmetrics::Sites metric_sites;
 uint64_t next_sample=0;
@@ -105,6 +108,13 @@ void publish() {
         reinterpret_cast<badgewire::Frame*>(static_cast<char*>(proton_mapping.view)+sizeof(livewire::Frame)));
 }
 
+// A suspension can hide the window and make car rows unavailable while
+// Live State still has a session header. Publish its flag independently.
+void publish_flags_only() {
+    session.frame.analysis.red_flag_status=session.entered?liveapi::read_red_flag(live):0;
+    publish();
+}
+
 void on_event(const SwoftyEvent* event,void*) {
     if(!event||!event->name) return;
     if(!std::strcmp(event->name,"flow.state")) {
@@ -118,6 +128,7 @@ void on_event(const SwoftyEvent* event,void*) {
     }
     if(!std::strcmp(event->name,"session.start")) {
         ++attempt;end_reason=0;next_career_read=0;career_id[0]=0;season=round=-1;
+        team_labels.clear();
     } else if(!std::strcmp(event->name,"session.end")) {
         // Keep this through session.unload, which frequently follows in the same tick.
         end_reason=event->a>=0&&event->a<=2?static_cast<uint32_t>(event->a)+1:0;
@@ -144,7 +155,7 @@ void on_frame(double,void*) {
         std::snprintf(session.frame.diagnostic,sizeof session.frame.diagnostic,
             "Live data unavailable: no supported game-binding layout for build %u.",game_stamp);
         if(binding_error[0]) std::snprintf(session.frame.diagnostic,sizeof session.frame.diagnostic,"%s",binding_error);
-        publish();return;
+        publish_flags_only();return;
     }
     uint32_t status=0;uint64_t age=0;
     auto hash=[](const char* text){uint32_t h=5381;for(;*text;text++)h=h*33+uint8_t(*text);return h;};
@@ -159,11 +170,12 @@ void on_frame(double,void*) {
         session.frame.diagnostic[0]=0;
         if(flow_result==SWOFTY_ASSET_UNAVAILABLE)
             std::snprintf(session.frame.diagnostic,sizeof session.frame.diagnostic,"Swofty's session-state API is unavailable.");
-        publish();return;
+        publish_flags_only();return;
     }
     livewire::Frame next{};auto read=copy_memory;
     if(direct_context.fill(read,sites,next,live,car_ops,session.gameplay)) {
         if(session.gameplay) {
+            analysisteams::fill(read,direct_context.registry.find(game_mode_key),api->db,team_labels,now,next);
             if(now>=next_career_read) {
                 next_career_read=now+1000;
                 size_t size=0;
@@ -186,13 +198,15 @@ void on_frame(double,void*) {
         sessionmetrics::fill(read,metric_sites,direct_context.registry,next,live,time_remaining);
         outlaps.apply(next,session.serial);
         session.frame=next;
-    } else if(!(session.frame.state&livewire::ACTIVE)) {
+        publish();return;
+    }
+    if(!(session.frame.state&livewire::ACTIVE)) {
         session.frame=next;
     } else {
         session.frame.state|=64; // No fresh values; retain the last display until explicit end.
         std::snprintf(session.frame.diagnostic,sizeof session.frame.diagnostic,"%s",next.diagnostic);
     }
-    publish();
+    publish_flags_only();
 }
 void on_load() {
     FILETIME started{};GetSystemTimeAsFileTime(&started);
@@ -207,6 +221,7 @@ void on_load() {
     direct=memory && verified_layout();
     if(direct) {
         sites.manager=resolve_binding("g_Game_Manager");
+        game_mode_key=api->resolve("k_Live_GameModeSystemKey");
         metric_sites.red_key=api->resolve("k_Live_RedFlagSystemKey");
         metric_sites.red_vt=api->resolve("vt_Sess_RedFlagSystem");
         metric_sites.race_vt=api->resolve("vt_Sess_RaceRuleset");

@@ -231,7 +231,22 @@ int main(int argc,char** argv){
     // Returning to the workstation clears rows even without session.end.
     hub_status=1;Sleep(210);frame(.2,nullptr);assert(!view->count);
     hub_status=2;Sleep(210);frame(.2,nullptr);assert(!view->count);
-    hub_status=3;Sleep(210);frame(.2,nullptr);assert(!view->count);
+    // Session flags must flow even while the game's flow gate hides the window
+    // and the publisher withholds the entire vehicle table.
+    fixture->header.have|=SWOFTY_LIVE_SHAVE_RED_FLAG;
+    fixture->header.red_flag=1;
+    Sleep(210);frame(.2,nullptr);
+    assert(view->analysis.red_flag_status==2);
+    const auto flag_attempt=view->analysis.attempt;
+    fixture->header.red_flag=2;
+    hub_status=3;Sleep(210);frame(.2,nullptr);
+    assert(!view->count&&!(view->state&livewire::WINDOW_READY));
+    assert(view->analysis.red_flag_status==3&&view->analysis.attempt==flag_attempt);
+    fixture->header.have&=~SWOFTY_LIVE_SHAVE_RED_FLAG;
+    Sleep(210);frame(.2,nullptr);assert(view->analysis.red_flag_status==0);
+    fixture->header.have|=SWOFTY_LIVE_SHAVE_RED_FLAG;
+    fixture->header.red_flag=0;
+    Sleep(210);frame(.2,nullptr);assert(view->analysis.red_flag_status==1);
     hub_status=0;Sleep(210);frame(.2,nullptr);assert(view->count==24);
     assert(!(view->state&livewire::WINDOW_READY));
     emit_flow("SessionStatePreRace",1);assert(!(view->state&livewire::WINDOW_READY));

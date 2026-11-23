@@ -2,7 +2,7 @@
   "schema_version": 1,
   "id": "unorthodoxstonendmodding.udp-telemetry",
   "name": "F1 Live Telemetry & Analysis",
-  "version": "0.7.0-prototype",
+  "version": "0.7.0-prototype.3",
   "author": "UnorthodoxStoneNDmodding",
   "description": "Live timing in the launcher or retro window, with optional session recording, practice rankings and CSV export in Telemetry Analysis.",
   "license": "MIT",

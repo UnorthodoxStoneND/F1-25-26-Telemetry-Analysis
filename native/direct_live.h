@@ -45,6 +45,7 @@ struct Context {
   if((snapshot.session.have&SWOFTY_LIVE_SHAVE_TYPE)&&snapshot.session.type>=1&&snapshot.session.type<=18)
    frame.session_type=snapshot.session.type;
   snapshot.player(frame.player,count);
+  frame.analysis.red_flag_status=liveapi::red_flag(snapshot.session);
   if(analysis) {
    const auto& live_session=snapshot.session;
    if(live_session.have&SWOFTY_LIVE_SHAVE_TRACK_NAME)

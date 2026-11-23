@@ -1,6 +1,6 @@
 # F1 Live Telemetry & Analysis [Swofty Add-On]
 
-Live telemetry and car setups for F1 25 and the 2026 Season Pack, including My Team. The **0.7.0-prototype** adds optional weekend recording and a Telemetry Analysis page alongside the launcher live table and standalone retro window.
+Live telemetry and car setups for F1 25 and the 2026 Season Pack, including My Team. The **0.7.0-prototype.3** adds optional weekend recording and a Telemetry Analysis page alongside the launcher live table and standalone retro window.
 
 ## Features
 
@@ -43,7 +43,7 @@ Recordings use CSV in **F1 Live Telemetry** under your system Documents folder. 
 
 ## Install
 
-For phase-one testing, install **`F1_Telemetry_v0.7.0-prototype.zip`**. The published version is available from [GitHub Releases](https://github.com/UnorthodoxStoneND/F1-25-26-Telemetry-Analysis/releases) or the Swofty Addon Browser. In Swofty, open **Addons** and select **Install addon from computer**. Enable **F1 Live Telemetry & Analysis** in the active profile and restart Swofty and the game after updating. The default display is **Launcher page**; choose **Retro window** under **Telemetry display** to use the standalone window. Only the selected mode displays telemetry.
+For phase-one testing, install **`F1_Telemetry_v0.7.0-prototype.3.zip`**. The published version is available from [GitHub Releases](https://github.com/UnorthodoxStoneND/F1-25-26-Telemetry-Analysis/releases) or the Swofty Addon Browser. In Swofty, open **Addons** and select **Install addon from computer**. Enable **F1 Live Telemetry & Analysis** in the active profile and restart Swofty and the game after updating. The default display is **Launcher page**; choose **Retro window** under **Telemetry display** to use the standalone window. Only the selected mode displays telemetry.
 
 The native DLL uses the same Microsoft Visual C++ v14 x64 runtime family as Swofty Launcher. If a runtime dependency is missing, install or repair [Microsoft's official x64 runtime](https://aka.ms/vc14/vc_redist.x64.exe).
 

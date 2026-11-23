@@ -47,7 +47,8 @@ struct AnalysisSession {
     uint64_t run, attempt, sample;
     int32_t season, round;
     uint32_t end_reason;
-    uint8_t safety_car_known, safety_car, chequered, reserved;
+    uint8_t safety_car_known, safety_car, chequered;
+    uint8_t red_flag_status; // 0 unavailable; else the Live State value plus one.
     char track[48], career[128];
 };
 struct Frame {
@@ -66,5 +67,5 @@ struct Frame {
     AnalysisCar analysis_cars[CARS];
 };
 static_assert(sizeof(Car)==328 && offsetof(Car,identity)==272 && offsetof(Car,laps)==280 && offsetof(Car,best_sectors)==288 && offsetof(Car,tyre_age_laps)==300 && offsetof(Car,last_sectors)==304 && offsetof(Car,drive_through)==316 && offsetof(Car,stop_go)==317 && offsetof(Car,time_penalty_ms)==320);
-static_assert(offsetof(Frame,sequence)==16 && offsetof(Frame,cars)==256 && offsetof(Frame,analysis)==10752 && sizeof(AnalysisSession)==216 && sizeof(AnalysisCar)==96 && sizeof(Frame)==14040);
+static_assert(offsetof(Frame,sequence)==16 && offsetof(Frame,cars)==256 && offsetof(Frame,analysis)==10752 && offsetof(AnalysisSession,red_flag_status)==39 && sizeof(AnalysisSession)==216 && sizeof(AnalysisCar)==96 && sizeof(Frame)==14040);
 }

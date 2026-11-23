@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-const addonVersion = "0.7.0-prototype"
+const addonVersion = "0.7.0-prototype.3"
 const addonID = "unorthodoxstonendmodding.udp-telemetry"
 
 type M = map[string]any

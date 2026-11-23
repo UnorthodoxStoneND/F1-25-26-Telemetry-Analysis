@@ -1,6 +1,6 @@
 # Installation
 
-1. Use **`F1_Telemetry_v0.7.0-prototype.zip`** for phase-one testing. Published packages are available on GitHub Releases and in the Swofty Addon Browser.
+1. Use **`F1_Telemetry_v0.7.0-prototype.3.zip`** for phase-one testing. Published packages are available on GitHub Releases and in the Swofty Addon Browser.
 2. Close the game. In Swofty, open **Addons**, select **Install addon from computer**, and choose the ZIP.
 3. Enable **F1 Live Telemetry & Analysis** in your active profile. Configure **Drivers shown** and **Highlight my row** in its settings.
 4. Choose **Launcher page** or **Retro window** under **Telemetry display**. Restart Swofty after replacing an earlier version, then launch the game through Swofty so its native component is loaded. Open **Live Telemetry** for launcher mode; window mode opens automatically once fresh session data is available. The inactive tab remains visible with the released launcher section API, without a telemetry table. Only one mode displays telemetry at a time.

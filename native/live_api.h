@@ -6,6 +6,16 @@
 
 // Cached core snapshot. Never uses the older UDP-backed telemetry API.
 namespace liveapi {
+inline uint8_t red_flag(const SwoftyLiveSession& session) {
+ return (session.have&SWOFTY_LIVE_SHAVE_RED_FLAG)&&session.red_flag<=2?uint8_t(session.red_flag+1):0;
+}
+inline uint8_t read_red_flag(const SwoftyLive* api) {
+ if(!api||api->version<1||!api->available||!api->session||!api->available()) return 0;
+ SwoftyLiveSession session{};session.version=1;session.size=sizeof session;
+ if(api->session(&session)!=SWOFTY_ASSET_OK||session.version<1||session.size<sizeof session) return 0;
+ return red_flag(session);
+}
+
 struct Snapshot {
  SwoftyLiveSession session{};
  SwoftyLiveCar cars[32]{};

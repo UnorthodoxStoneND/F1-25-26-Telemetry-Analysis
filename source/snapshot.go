@@ -106,7 +106,8 @@ func decodeInto(b []byte, storage []Car) (Frame, error) {
 		Run: u64(at), Attempt: u64(at + 8), Sample: u64(at + 16),
 		Season: int32(u(at + 24)), Round: int32(u(at + 28)), EndReason: u(at + 32),
 		SafetyCarKnown: b[at+36] != 0, SafetyCar: b[at+37], Chequered: b[at+38] != 0,
-		Track: cstring(b[at+40 : at+88]), Career: cstring(b[at+88 : at+216]),
+		RedFlag: redFlagStatus(b[at+39]),
+		Track:   cstring(b[at+40 : at+88]), Career: cstring(b[at+88 : at+216]),
 	}
 	count := u(48)
 	if count > maxCars {

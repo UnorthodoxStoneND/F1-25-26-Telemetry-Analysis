@@ -31,6 +31,7 @@ type AnalysisSession struct {
 	SafetyCarKnown       bool
 	SafetyCar            uint8
 	Chequered            bool
+	RedFlag              redFlagStatus
 	Track, Career        string
 }
 
@@ -42,10 +43,37 @@ type AnalysisCar struct {
 	Team                                          string
 }
 
-const analysisFolder = "F1 Live Telemetry"
+const (
+	analysisFolder = "F1 Live Telemetry"
+	analysisSchema = "2"
+	flagsFileName  = "flags.csv"
+)
+
+type redFlagStatus uint8
+
+const (
+	redFlagUnavailable redFlagStatus = iota
+	redFlagNone
+	redFlagDeployed
+	redFlagSuspended
+)
+
+func (s redFlagStatus) label() string {
+	switch s {
+	case redFlagNone:
+		return "none"
+	case redFlagDeployed:
+		return "deployed"
+	case redFlagSuspended:
+		return "suspended"
+	default:
+		return ""
+	}
+}
 
 var sessionCSV = []string{"schema", "profile", "career_id", "season", "round", "track_key", "session", "type", "kind", "started_utc", "updated_utc", "state", "reason", "coverage", "run", "attempt", "addon_version"}
-var sampleCSV = []string{"elapsed_ms", "epoch", "driver_id", "driver", "team_key", "position", "grid", "result", "lap", "laps_completed", "current_lap_ms", "current_s1_ms", "current_s2_ms", "lap_flags", "last_lap_ms", "last_s1_ms", "last_s2_ms", "last_s3_ms", "best_lap_ms", "best_lap_number", "best_s1_ms", "best_s2_ms", "best_s3_ms", "lap_distance_m", "speed_m_s", "throttle", "brake", "gear", "rpm", "gap_ahead_ms", "gap_leader_ms", "actual_compound_id", "visual_compound_id", "tyre_age_laps", "stint_laps", "wear_fl_pct", "wear_fr_pct", "wear_rl_pct", "wear_rr_pct", "in_pit_lane", "pit_status", "pit_stops", "safety_car_status", "chequered", "drive_through", "stop_go", "time_penalty_ms", "session_time_left_s", "session_total_laps"}
+var sampleCSV = []string{"elapsed_ms", "epoch", "driver_id", "driver", "team_key", "position", "grid", "result", "lap", "laps_completed", "current_lap_ms", "current_s1_ms", "current_s2_ms", "lap_flags", "last_lap_ms", "last_s1_ms", "last_s2_ms", "last_s3_ms", "best_lap_ms", "best_lap_number", "best_s1_ms", "best_s2_ms", "best_s3_ms", "lap_distance_m", "speed_m_s", "throttle", "brake", "gear", "rpm", "gap_ahead_ms", "gap_leader_ms", "actual_compound_id", "visual_compound_id", "tyre_age_laps", "stint_laps", "wear_fl_pct", "wear_fr_pct", "wear_rl_pct", "wear_rr_pct", "in_pit_lane", "pit_status", "pit_stops", "safety_car_status", "chequered", "drive_through", "stop_go", "time_penalty_ms", "session_time_left_s", "session_total_laps", "red_flag_status"}
+var flagsCSV = []string{"elapsed_ms", "red_flag_status"}
 var lapsCSV = []string{"driver_id", "driver", "team_key", "lap", "elapsed_ms", "lap_ms", "valid", "s1_ms", "s2_ms", "s3_ms", "actual_compound_id", "visual_compound_id"}
 var driversCSV = []string{"driver_id", "driver", "team_key", "laps_completed", "best_lap_ms", "compounds", "average_valid_lap_ms", "recorded_valid_laps"}
 
@@ -59,19 +87,21 @@ type analysisCapture struct {
 type analysisAttempt struct{ run, attempt uint64 }
 
 type analysisRecording struct {
-	key                 analysisAttempt
-	dir, profile        string
-	session, track      string
-	career              string
-	season, round       int32
-	sessionType, kind   uint32
-	started, checkpoint time.Time
-	startSample, sample uint64
-	epoch               int
-	partial, chequered  bool
-	drivers             [maxCars]analysisDriver
-	file                *os.File
-	samples             *csv.Writer
+	key                    analysisAttempt
+	dir, profile           string
+	session, track         string
+	career                 string
+	season, round          int32
+	sessionType, kind      uint32
+	started, checkpoint    time.Time
+	startSample, sample    uint64
+	epoch                  int
+	lastRewind             uint64
+	partial, chequered     bool
+	drivers                [maxCars]analysisDriver
+	samplesFile, flagsFile *os.File
+	samples, flags         *csv.Writer
+	lastRedFlag            redFlagStatus
 }
 
 type analysisDriver struct {
@@ -79,6 +109,9 @@ type analysisDriver struct {
 	name, team      string
 	laps            uint32
 	clock           uint32
+	distance        float32
+	progressKnown   bool
+	wasInPit        bool
 	best            uint32
 	compounds       map[analysisTyre]uint32
 	tyre            analysisTyre
@@ -167,8 +200,7 @@ func (a *analysisCapture) close(state, reason string, now time.Time) {
 		if state == "interrupted" {
 			a.continued[r.key] = true
 		}
-		r.samples.Flush()
-		err := errors.Join(r.samples.Error(), r.file.Sync(), r.file.Close())
+		err := errors.Join(r.flush(), r.samplesFile.Sync(), r.flagsFile.Sync(), r.samplesFile.Close(), r.flagsFile.Close())
 		if err != nil {
 			state, reason = "interrupted", "samples could not be saved"
 		}
@@ -194,15 +226,15 @@ func (a *analysisCapture) observe(profile string, f Frame, now time.Time) {
 		a.close(state, reason, now)
 		return
 	}
-	if key.run == 0 || key.attempt == 0 || s.Sample == 0 ||
-		f.State&(active|windowReady|paused|snapshotStale) != active|windowReady ||
-		f.SessionType == 18 || f.SessionKind == 5 || (f.SessionType == 0 && f.SessionKind == 0) {
+	if key.run == 0 || key.attempt == 0 || a.err != nil {
 		return
 	}
-	if a.err != nil {
-		return
-	}
+	canSample := s.Sample != 0 && f.State&(active|windowReady|paused|snapshotStale) == active|windowReady &&
+		f.SessionType != 18 && f.SessionKind != 5 && (f.SessionType != 0 || f.SessionKind != 0)
 	if a.current == nil {
+		if !canSample {
+			return
+		}
 		if a.err = a.configure(); a.err != nil {
 			return
 		}
@@ -214,34 +246,69 @@ func (a *analysisCapture) observe(profile string, f Frame, now time.Time) {
 		a.current = r
 	}
 	r := a.current
-	if r.sample >= s.Sample {
+	// Session flags remain observable while paused, suspended or outside
+	// the window's gameplay gate. Do not require a fresh set of driver rows.
+	if err := r.observeRedFlag(f); err != nil {
+		a.close("interrupted", "flag write failed", now)
+		a.err = err
 		return
 	}
+	if canSample && s.Sample > r.sample {
+		if r.track == "" {
+			r.track = s.Track
+		}
+		if r.career == "" {
+			r.career = s.Career
+		}
+		if r.round < 1 && s.Round > 0 && s.Season >= 0 {
+			r.season, r.round = s.Season, s.Round
+		}
+		if f.SessionKind != 0 {
+			r.session, r.kind = sessionLabel(f), f.SessionKind
+		}
+		if err := r.record(f); err != nil {
+			a.close("interrupted", "recording write failed", now)
+			a.err = err
+			return
+		}
+	}
 	if now.Sub(r.checkpoint) >= 5*time.Second {
-		r.samples.Flush()
-		if err := errors.Join(r.samples.Error(), r.save("recording", "", now)); err != nil {
+		if err := errors.Join(r.flush(), r.save("recording", "", now)); err != nil {
 			a.close("interrupted", "recording write failed", now)
 			a.err = err
 			return
 		}
 		r.checkpoint = now
 	}
-	if r.track == "" {
-		r.track = s.Track
+}
+
+func (r *analysisRecording) flush() error {
+	r.samples.Flush()
+	r.flags.Flush()
+	return errors.Join(r.samples.Error(), r.flags.Error())
+}
+
+func (r *analysisRecording) observeRedFlag(f Frame) error {
+	tick := f.Tick
+	if tick == 0 {
+		tick = f.Analysis.Sample
 	}
-	if r.career == "" {
-		r.career = s.Career
+	if tick < r.startSample {
+		return nil
 	}
-	if r.round < 1 && s.Round > 0 && s.Season >= 0 {
-		r.season, r.round = s.Season, s.Round
+	status := f.Analysis.RedFlag
+	label := status.label()
+	if label == "" {
+		status, label = redFlagUnavailable, "unavailable"
 	}
-	if f.SessionKind != 0 {
-		r.session, r.kind = sessionLabel(f), f.SessionKind
+	if status == r.lastRedFlag {
+		return nil
 	}
-	if err := r.record(f); err != nil {
-		a.close("interrupted", "recording write failed", now)
-		a.err = err
+	if err := r.flags.Write([]string{num(tick-r.startSample, true), label}); err != nil {
+		return err
 	}
+	r.lastRedFlag = status
+	return nil
 }
 
 func (a *analysisCapture) start(profile string, f Frame, now time.Time) (*analysisRecording, error) {
@@ -271,53 +338,62 @@ func (a *analysisCapture) start(profile string, f Frame, now time.Time) (*analys
 		return nil, err
 	}
 	r.dir = dir
-	if r.file, err = os.OpenFile(filepath.Join(dir, "samples.csv"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600); err != nil {
+	if r.samplesFile, err = os.OpenFile(filepath.Join(dir, "samples.csv"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600); err != nil {
 		return nil, err
 	}
-	r.samples = csv.NewWriter(r.file)
-	if err = errors.Join(r.samples.Write(sampleCSV), r.save("recording", "", now)); err != nil {
-		return nil, errors.Join(err, r.file.Close())
+	r.flagsFile, err = os.OpenFile(filepath.Join(dir, flagsFileName), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	if err != nil {
+		return nil, errors.Join(err, r.samplesFile.Close())
+	}
+	r.samples, r.flags = csv.NewWriter(r.samplesFile), csv.NewWriter(r.flagsFile)
+	if err = errors.Join(r.samples.Write(sampleCSV), r.flags.Write(flagsCSV), r.flush(), r.save("recording", "", now)); err != nil {
+		return nil, errors.Join(err, r.samplesFile.Close(), r.flagsFile.Close())
 	}
 	return r, nil
+}
+
+// A clock reset at the timing line can happen before the completed-lap
+// count changes (including at the end of an out-lap).
+func playerRewound(c Car, d *analysisDriver) bool {
+	x := c.Analysis
+	if x.Known&analysisLap == 0 || c.Flags&inPitLane != 0 || d.wasInPit ||
+		x.Current == 0 || uint64(x.Current)+1000 >= uint64(d.clock) ||
+		x.Known&analysisProgress == 0 || !d.progressKnown {
+		return false
+	}
+	if x.Current <= 3000 && x.LapDistance < 250 && d.distance > 1000 {
+		return false
+	}
+	return x.LapDistance+3 < d.distance
+}
+
+func (r *analysisRecording) rewind(f Frame) bool {
+	for _, c := range f.Cars {
+		d := &r.drivers[c.Vehicle]
+		if c.Known&knownLaps == 0 || !d.hasLap {
+			continue
+		}
+		if c.Laps < d.laps || (int32(c.Vehicle) == f.Player && c.Laps == d.laps && playerRewound(c, d)) {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *analysisRecording) record(f Frame) error {
 	r.sample = f.Analysis.Sample
 	elapsed := r.sample - r.startSample
-	rewound := false
-	for _, c := range f.Cars {
-		d, extra := &r.drivers[c.Vehicle], c.Analysis
-		if c.Known&knownLaps == 0 || !d.hasLap {
-			continue
-		}
-		if c.Laps < d.laps || (int32(c.Vehicle) == f.Player && c.Laps == d.laps &&
-			extra.Known&analysisLap != 0 && c.Flags&inPitLane == 0 &&
-			extra.Current > 0 && extra.Current+1000 < d.clock) {
-			rewound = true
-			break
-		}
-	}
+	rewound := r.rewind(f)
 	if rewound {
-		r.epoch++
-		r.chequered = false
-		for _, c := range f.Cars {
-			d := &r.drivers[c.Vehicle]
-			if c.Known&knownLaps != 0 {
-				for tyre, firstLap := range d.compounds {
-					if firstLap >= c.Laps {
-						delete(d.compounds, tyre)
-					}
-				}
-				for lap := range d.recorded {
-					if lap >= c.Laps {
-						delete(d.recorded, lap)
-					}
-				}
-				d.laps, d.hasLap = c.Laps, true
-				d.tyreKnown = false
-			}
+		// While Flashback is moving backwards, it publishes several samples
+		// per action. Keep these in the same epoch across short pauses.
+		if r.lastRewind == 0 || r.sample-r.lastRewind >= 750 {
+			r.epoch++
 		}
+		r.lastRewind = r.sample
+		r.chequered = false
 	}
+
 	r.chequered = r.chequered || f.Analysis.Chequered
 	for _, c := range f.Cars {
 		d, extra := &r.drivers[c.Vehicle], c.Analysis
@@ -338,27 +414,7 @@ func (r *analysisRecording) record(f Frame) error {
 		actual := num(c.Compound, c.Known&knownTyre != 0)
 		visual := num(c.Visual, c.Known&knownTyre != 0)
 		if c.Known&knownLaps != 0 {
-			previous := d.laps
-			if c.Laps > previous+1 || (!d.hasLap && c.Laps > 0) {
-				r.partial = true
-			}
-			if c.Laps > 0 && (!d.hasLap || c.Laps > previous || rewound) {
-				if c.Known&knownLast != 0 && extra.Known&analysisLap != 0 {
-					lap := analysisLapRow{time: uint64(c.Last), elapsed: elapsed, valid: extra.LapFlags&2 != 0}
-					if d.tyreKnown && c.Laps == previous+1 {
-						lap.actual, lap.visual = num(d.tyre.actual, true), num(d.tyre.visual, true)
-					} else if !rewound {
-						lap.actual, lap.visual = actual, visual
-					}
-					if c.Known&knownLastSectors != 0 {
-						lap.sectors = c.LastSectors
-					}
-					d.recorded[c.Laps] = lap
-				} else {
-					r.partial = true
-				}
-			}
-			d.laps, d.hasLap = c.Laps, true
+			r.observeLaps(c, d, elapsed, rewound, actual, visual)
 		}
 		if c.Known&knownTyre != 0 {
 			d.tyre = analysisTyre{c.Compound, c.Visual}
@@ -367,14 +423,65 @@ func (r *analysisRecording) record(f Frame) error {
 			}
 			d.tyreKnown = true
 		}
+		d.clock = 0
 		if extra.Known&analysisLap != 0 {
 			d.clock = extra.Current
 		}
+		d.distance = extra.LapDistance
+		d.progressKnown = extra.Known&analysisProgress != 0
+		d.wasInPit = c.Flags&inPitLane != 0
 		if err := r.samples.Write(sampleRow(f, c, d, elapsed, r.epoch, actual, visual)); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func (r *analysisRecording) observeLaps(c Car, d *analysisDriver, elapsed uint64, rewound bool, actual, visual string) {
+	previous := d.laps
+	rolledBack := rewound && (!d.hasLap || c.Laps <= previous)
+	if rolledBack {
+		for lap := range d.recorded {
+			if lap > c.Laps {
+				delete(d.recorded, lap)
+			}
+		}
+		for tyre, firstLap := range d.compounds {
+			if firstLap >= c.Laps {
+				delete(d.compounds, tyre)
+			}
+		}
+		// The pre-rewind fitted set might belong to the superseded timeline.
+		d.tyreKnown = false
+	}
+	if c.Laps > previous+1 || (!d.hasLap && c.Laps > 0) {
+		r.partial = true
+	}
+	d.laps, d.hasLap = c.Laps, true
+	if c.Laps == 0 || (c.Laps <= previous && !rolledBack) {
+		return
+	}
+	prior, recorded := d.recorded[c.Laps]
+	if c.Known&knownLast == 0 || c.Analysis.Known&analysisLap == 0 {
+		if !recorded {
+			r.partial = true
+		}
+		return
+	}
+	lap := analysisLapRow{time: uint64(c.Last), elapsed: elapsed, valid: c.Analysis.LapFlags&2 != 0}
+	if recorded && prior.time == lap.time {
+		// This completed lap survived the rollback. Keep the tyre and
+		// original completion sample captured at its actual timing line.
+		lap.elapsed, lap.actual, lap.visual, lap.sectors = prior.elapsed, prior.actual, prior.visual, prior.sectors
+	} else if d.tyreKnown && c.Laps == previous+1 {
+		lap.actual, lap.visual = num(d.tyre.actual, true), num(d.tyre.visual, true)
+	} else if !rolledBack {
+		lap.actual, lap.visual = actual, visual
+	}
+	if c.Known&knownLastSectors != 0 {
+		lap.sectors = c.LastSectors
+	}
+	d.recorded[c.Laps] = lap
 }
 
 func sampleRow(f Frame, c Car, d *analysisDriver, elapsed uint64, epoch int, actual, visual string) []string {
@@ -398,7 +505,7 @@ func sampleRow(f Frame, c Car, d *analysisDriver, elapsed uint64, epoch int, act
 		truth(c.Flags&inPitLane != 0, c.Known&knownPit != 0), num(x.PitStatus, x.Known&analysisPit != 0), num(x.PitStops, x.Known&analysisPit != 0),
 		num(f.Analysis.SafetyCar, f.Analysis.SafetyCarKnown), truth(f.Analysis.Chequered, true),
 		num(c.DriveThrough, c.Known&knownPenalties != 0), num(c.StopGo, c.Known&knownPenalties != 0), num(c.TimePenaltyMS, c.Known&knownTimePenalty != 0),
-		num(f.Progress, f.State&sessionTimer != 0), num(f.Progress>>16, f.State&sessionLaps != 0),
+		num(f.Progress, f.State&sessionTimer != 0), num(f.Progress>>16, f.State&sessionLaps != 0), f.Analysis.RedFlag.label(),
 	}
 }
 
@@ -443,7 +550,7 @@ func (r *analysisRecording) save(state, reason string, now time.Time) error {
 		coverage = "partial"
 	}
 	row := []string{
-		"1", analysisText(r.profile), analysisText(r.career), num(r.season+1, r.season >= 0 && r.round > 0), num(r.round, r.round > 0),
+		analysisSchema, analysisText(r.profile), analysisText(r.career), num(r.season+1, r.season >= 0 && r.round > 0), num(r.round, r.round > 0),
 		analysisText(r.track), r.session, num(r.sessionType, true), num(r.kind, true), r.started.UTC().Format(time.RFC3339Nano),
 		now.UTC().Format(time.RFC3339Nano), state, reason, coverage, num(r.key.run, true), num(r.key.attempt, true), addonVersion,
 	}

@@ -16,6 +16,10 @@ static_assert(std::is_same_v<SwoftyFrameFn,void(*)(double,void*)>);
 static_assert(std::is_same_v<decltype(SwoftyEvents::available),int(*)()>);
 static_assert(std::is_same_v<decltype(SwoftyEvents::subscribe),int(*)(const char*,SwoftyEventFn,void*,uint32_t*)>);
 static_assert(std::is_same_v<decltype(SwoftyEvents::on_frame),int(*)(SwoftyFrameFn,void*,uint32_t*)>);
+static_assert(std::is_same_v<decltype(SwoftyDb::open),int(*)(const char*,SwoftyDbCursor*)>);
+static_assert(std::is_same_v<decltype(SwoftyDb::step),int(*)(SwoftyDbCursor*)>);
+static_assert(std::is_same_v<decltype(SwoftyDb::cell),int(*)(const SwoftyDbCursor*,const char*,SwoftyDbValue*)>);
+static_assert(std::is_same_v<decltype(SwoftyDb::row_name),const char*(*)(const SwoftyDbCursor*)>);
 static_assert(std::is_same_v<decltype(SwoftyCareer::available),int(*)()>);
 static_assert(std::is_same_v<decltype(SwoftyCareer::flow_status),int(*)(uint32_t,uint32_t*,uint64_t*)>);
 static_assert(std::is_same_v<decltype(SwoftyLive::available),int(*)()>);
@@ -46,6 +50,8 @@ int main() {
     std::printf("{\"api_version\":%u,\"mixin_size\":%zu",SWOFTY_API_VERSION,sizeof(SwoftyMixin));
     FIELD(SwoftyApi,version);FIELD(SwoftyApi,log);FIELD(SwoftyApi,module_base);
     FIELD(SwoftyApi,resolve);FIELD(SwoftyApi,register_mixins);FIELD(SwoftyApi,events);FIELD(SwoftyApi,career);
+    FIELD(SwoftyApi,db);FIELD(SwoftyDb,available);FIELD(SwoftyDb,open);FIELD(SwoftyDb,step);FIELD(SwoftyDb,cell);FIELD(SwoftyDb,row_name);
+    FIELD(SwoftyDbValue,tag);FIELD(SwoftyDbValue,i);FIELD(SwoftyDbCursor,count);VALUE(SWOFTY_DB_INT);VALUE(SWOFTY_DB_ID);
     FIELD(SwoftyApi,hooks);FIELD(SwoftyHooks,version);FIELD(SwoftyHooks,available);FIELD(SwoftyHooks,attach);FIELD(SwoftyHooks,context_in);
     FIELD(SwoftyHookCall,context);FIELD(SwoftyText,data);FIELD(SwoftyText,size);
     FIELD(SwoftyMixin,target);FIELD(SwoftyMixin,kind);FIELD(SwoftyMixin,priority);FIELD(SwoftyMixin,handler);FIELD(SwoftyMixin,orig);
@@ -71,6 +77,7 @@ int main() {
     FIELD(SwoftyLiveSession,version);FIELD(SwoftyLiveSession,size);FIELD(SwoftyLiveSession,have);FIELD(SwoftyLiveSession,cars);FIELD(SwoftyLiveSession,player);
     FIELD(SwoftyLiveSession,type);
     FIELD(SwoftyLiveSession,track_name);FIELD(SwoftyLiveSession,safety_car);FIELD(SwoftyLiveSession,chequered);
+    FIELD(SwoftyLiveSession,red_flag);VALUE(SWOFTY_LIVE_SHAVE_RED_FLAG);
     VALUE(SWOFTY_LIVE_SHAVE_TRACK_NAME);VALUE(SWOFTY_LIVE_SHAVE_SAFETY_CAR);VALUE(SWOFTY_LIVE_LAP_LAST_VALID);
     FIELD(SwoftyLiveCar,version);FIELD(SwoftyLiveCar,size);FIELD(SwoftyLiveCar,have);FIELD(SwoftyLiveCar,vehicle);
     FIELD(SwoftyLiveCar,position);FIELD(SwoftyLiveCar,tyre_actual);FIELD(SwoftyLiveCar,tyre_visual);FIELD(SwoftyLiveCar,pit_status);
