@@ -20,22 +20,15 @@ std::map<std::string,SwoftyEventFn> subscribers;
 std::map<std::string,SwoftyHookFn> context_subscribers;
 uint32_t current_kind=livewire::PRACTICE;
 bool context_available=true;
-bool verified=false,missing_screen=false;
+bool verified=false;
 uint32_t session_status=0,hub_status=0,load_status=0,unload_status=0;
 unsigned char pe[4096]{};
 std::unique_ptr<BindingFixture> fixture;
-uint64_t(*open_screen)(void*,void*,void*,void*);
-unsigned screen_calls=0;
-uint64_t screen_original(void* scene,void*,void* a3,void* a4) {
- assert(scene==reinterpret_cast<void*>(0x1234)&&a3==reinterpret_cast<void*>(0x2345)&&a4==reinterpret_cast<void*>(0x3456));
- screen_calls++;return 0xabcdef1234567890ull;
-}
 void log(const char*,...){}
 uintptr_t base(){return verified?reinterpret_cast<uintptr_t>(pe):reinterpret_cast<uintptr_t>(GetModuleHandleW(nullptr));}
-uintptr_t resolve(const char* name){if(!std::strcmp(name,"Vm_Open_Screen"))return missing_screen?0:reinterpret_cast<uintptr_t>(screen_original);return fixture?fixture->resolve(name):0;}
+uintptr_t resolve(const char* name){return fixture?fixture->resolve(name):0;}
 int mixins(const SwoftyMixin* list,size_t count){for(size_t i=0;i<count;i++) {
  if(list[i].kind==SWOFTY_MIXIN_ON_LOAD)load=reinterpret_cast<void(*)()>(list[i].handler);
- else if(!std::strcmp(list[i].target,"Vm_Open_Screen")){assert(!missing_screen);open_screen=reinterpret_cast<decltype(open_screen)>(list[i].handler);*list[i].orig=reinterpret_cast<void*>(screen_original);}
  else assert(false);
  }return 1;}
 int available(){return 1;}
@@ -82,20 +75,12 @@ void emit_context(const char* point) {
  assert(context_subscribers.count(point));SwoftyHookCall call{};call.context=&current_kind;
  context_subscribers[point](nullptr,&call);
 }
-void emit_screen(const char* name) {
- std::vector<unsigned char> text(9+std::strlen(name)+1),screen(0x70);
- std::memcpy(text.data()+9,name,std::strlen(name)+1);
- auto pointer=reinterpret_cast<uint64_t>(text.data());std::memcpy(screen.data()+0x68,&pointer,sizeof pointer);
- auto before=screen_calls;
- assert(open_screen(reinterpret_cast<void*>(0x1234),screen.data(),reinterpret_cast<void*>(0x2345),reinterpret_cast<void*>(0x3456))==0xabcdef1234567890ull);
- assert(screen_calls==before+1);
-}
 void emit(const char* name){SwoftyEvent e{};e.name=name;assert(subscribers.count(name));subscribers[name](&e,nullptr);
  if(context_subscribers.count(name))emit_context(name);
 }
 }
 int main(int argc,char** argv){
-    assert(argc==3||argc==4||argc==5);verified=argc>=4;missing_screen=argc==5;
+    assert(argc==3||argc==4);verified=argc==4;
     auto dos=reinterpret_cast<IMAGE_DOS_HEADER*>(pe);dos->e_magic=IMAGE_DOS_SIGNATURE;dos->e_lfanew=0x80;
     auto nt=reinterpret_cast<IMAGE_NT_HEADERS64*>(pe+0x80);nt->Signature=IMAGE_NT_SIGNATURE;nt->FileHeader.Machine=IMAGE_FILE_MACHINE_AMD64;nt->FileHeader.TimeDateStamp=argc>=4&&!std::strcmp(argv[3],"current")?builds::CURRENT_STEAM:builds::ORIGINAL_STEAM;
     auto core=LoadLibraryA(argv[1]);assert(core);
@@ -124,7 +109,7 @@ int main(int argc,char** argv){
     auto badge_handle=OpenFileMappingW(FILE_MAP_READ,FALSE,name);assert(badge_handle);
     auto badge_view=static_cast<const badgewire::Frame*>(MapViewOfFile(badge_handle,FILE_MAP_READ,0,0,sizeof(badgewire::Frame)));assert(badge_view);
     assert(badge_view->size==sizeof(badgewire::Frame)&&!badge_view->cars[0].width);
-    frame(.2,nullptr);assert(view->size==10752 && !(view->sequence&1));
+    frame(.2,nullptr);assert(view->size==sizeof(livewire::Frame) && !(view->sequence&1));
     if(!verified) {assert(!view->count && view->diagnostic[0]);UnmapViewOfFile(badge_view);CloseHandle(badge_handle);UnmapViewOfFile(view);CloseHandle(handle);FreeLibrary(dll);FreeLibrary(core);std::cout<<"PASS: unsupported build is reported instead of an indefinite waiting message\n";return 0;}
     assert(!view->count); // Readable cars before a start are not a session.
     session_status=2;hub_status=2;emit("session.start");emit("pause");
@@ -132,17 +117,6 @@ int main(int argc,char** argv){
     // The career workstation is inside StateSession, but must stay empty.
     fixture->live_enabled=true;hub_status=0;Sleep(210);frame(.2,nullptr);
     assert(view->count==24 && view->player==12 && (view->state&livewire::ACTIVE));
-    if(missing_screen) {
-        assert(!open_screen);
-        emit_flow("ZoomToMonitorCutscene",1);assert(view->state&livewire::WINDOW_READY);
-        assert(view->count==24&&view->cars[0].position==1&&view->cars[0].name[0]);
-        emit("pause");assert(view->state&livewire::PAUSED);
-        emit("resume");assert(!(view->state&livewire::PAUSED));
-        emit("session.end");assert(!view->count&&(view->state&livewire::ENDED));
-        UnmapViewOfFile(badge_view);CloseHandle(badge_handle);UnmapViewOfFile(view);CloseHandle(handle);FreeLibrary(dll);FreeLibrary(core);
-        std::cout<<"PASS: missing optional screen binding never registered; publisher, live field, retro readiness and lifecycle remain enabled for build "<<nt->FileHeader.TimeDateStamp<<"\n";
-        return 0;
-    }
     fixture->live_cars[0].have|=SWOFTY_LIVE_HAVE_PENALTIES;
     fixture->live_cars[0].drive_through=2;fixture->live_cars[0].stop_go=1;fixture->live_cars[0].time_penalty_s=5.25f;
     Sleep(210);frame(.2,nullptr);
@@ -167,6 +141,15 @@ int main(int argc,char** argv){
     emit_flow("ZoomToMonitorCutscene",1);assert(view->state&livewire::WINDOW_READY);
     emit_flow("ZoomToMonitorCutscene",0);Sleep(210);frame(.2,nullptr);
     assert(view->state&livewire::WINDOW_READY); // Transient garage entry is latched.
+    assert(view->analysis.run&&view->analysis.attempt==1&&view->analysis.sample);
+    fixture->header.have|=SWOFTY_LIVE_SHAVE_TRACK_NAME;
+    std::memcpy(fixture->header.track_name,"silverstone",sizeof("silverstone"));
+    fixture->live_cars[12].have|=SWOFTY_LIVE_HAVE_SPEED;
+    fixture->live_cars[12].speed=30.0f;
+    Sleep(210);frame(.2,nullptr);
+    assert(std::strcmp(view->analysis.track,"silverstone")==0);
+    assert(view->analysis_cars[12].known&livewire::ANALYSIS_SPEED);
+    assert(view->analysis_cars[12].speed==30.0f);
 
     assert(view->session_type==1&&view->session_kind==livewire::PRACTICE);
     assert(badge_view->session==view->session&&badge_view->sequence==view->sequence&&!(badge_view->sequence&1));
@@ -232,16 +215,8 @@ int main(int argc,char** argv){
     Sleep(210);frame(.2,nullptr);assert(!(view->cars[1].flags&livewire::OUT_LAP));
     emit("pause");assert(view->state&livewire::PAUSED && view->count==24 && (view->state&livewire::WINDOW_READY));
     emit("resume");assert(!(view->state&livewire::PAUSED));
-    // Recorded post-race UI: standings -> career rewards/Finances, before
-    // StateSession exits and without the post-practice CareerHubUpdate event.
-    emit_screen("session_results_container");assert(view->state&livewire::WINDOW_READY);
-    emit_screen("slice_rewards_career_pagination");assert(!(view->state&livewire::WINDOW_READY));
-    Sleep(210);frame(.2,nullptr);
-    assert(view->count==24&&(view->state&livewire::ACTIVE)&&!(view->state&livewire::WINDOW_READY));
-    emit_screen("slice_bg_my_team_full");assert(!(view->state&livewire::WINDOW_READY));
-    emit_screen("session_results_container");assert(!(view->state&livewire::WINDOW_READY));
-    assert(open_screen(reinterpret_cast<void*>(0x1234),nullptr,reinterpret_cast<void*>(0x2345),reinterpret_cast<void*>(0x3456))==0xabcdef1234567890ull);
-    emit_flow("ZoomToMonitorCutscene",1);assert(view->state&livewire::WINDOW_READY);
+    // Keep readiness during results while the session remains active.
+    assert(view->state&livewire::WINDOW_READY);
     // Actual post-practice order: the hub update completes within one
     // millisecond, then rewards open while StateSession and cars remain live.
     // No on_frame poll runs during this transition.
@@ -256,7 +231,22 @@ int main(int argc,char** argv){
     // Returning to the workstation clears rows even without session.end.
     hub_status=1;Sleep(210);frame(.2,nullptr);assert(!view->count);
     hub_status=2;Sleep(210);frame(.2,nullptr);assert(!view->count);
-    hub_status=3;Sleep(210);frame(.2,nullptr);assert(!view->count);
+    // Session flags must flow even while the game's flow gate hides the window
+    // and the publisher withholds the entire vehicle table.
+    fixture->header.have|=SWOFTY_LIVE_SHAVE_RED_FLAG;
+    fixture->header.red_flag=1;
+    Sleep(210);frame(.2,nullptr);
+    assert(view->analysis.red_flag_status==2);
+    const auto flag_attempt=view->analysis.attempt;
+    fixture->header.red_flag=2;
+    hub_status=3;Sleep(210);frame(.2,nullptr);
+    assert(!view->count&&!(view->state&livewire::WINDOW_READY));
+    assert(view->analysis.red_flag_status==3&&view->analysis.attempt==flag_attempt);
+    fixture->header.have&=~SWOFTY_LIVE_SHAVE_RED_FLAG;
+    Sleep(210);frame(.2,nullptr);assert(view->analysis.red_flag_status==0);
+    fixture->header.have|=SWOFTY_LIVE_SHAVE_RED_FLAG;
+    fixture->header.red_flag=0;
+    Sleep(210);frame(.2,nullptr);assert(view->analysis.red_flag_status==1);
     hub_status=0;Sleep(210);frame(.2,nullptr);assert(view->count==24);
     assert(!(view->state&livewire::WINDOW_READY));
     emit_flow("SessionStatePreRace",1);assert(!(view->state&livewire::WINDOW_READY));

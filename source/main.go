@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-const addonVersion = "0.6.0"
+const addonVersion = "0.7.0-prototype.3"
 const addonID = "unorthodoxstonendmodding.udp-telemetry"
 
 type M = map[string]any
@@ -23,24 +23,27 @@ type Message struct {
 	Params json.RawMessage `json:"params"`
 }
 type App struct {
-	desktopError                    string
-	displayMode                     string
-	reader                          Reader
-	frame                           Frame
-	enabled                         bool
-	profileName, data, mode, status string
-	highlight                       bool
-	disableSlides                   bool
-	expanded                        string
-	lastView                        viewState
-	viewSent                        bool
-	disabled                        [3]bool
-	hidden                          [3]uint32
-	widths                          [3]map[string]float32
-	columnPath                      string
-	columnsOpen                     bool
-	editorLayout                    sessionLayout
-	columnGeneration                uint64
+	capture                           analysisCapture
+	analysisPage                      analysisPage
+	analysisEnabled, analysisViewSent bool
+	desktopError                      string
+	displayMode                       string
+	reader                            Reader
+	frame                             Frame
+	enabled                           bool
+	profileName, data, mode, status   string
+	highlight                         bool
+	disableSlides                     bool
+	expanded                          string
+	lastView                          viewState
+	viewSent                          bool
+	disabled                          [3]bool
+	hidden                            [3]uint32
+	widths                            [3]map[string]float32
+	columnPath                        string
+	columnsOpen                       bool
+	editorLayout                      sessionLayout
+	columnGeneration                  uint64
 }
 
 func (a *App) profile(raw json.RawMessage) {
@@ -53,6 +56,9 @@ func (a *App) profile(raw json.RawMessage) {
 		return
 	}
 	if a.profileName != p.Name || a.enabled != (p.Enabled && !p.Vanilla) {
+		a.capture.close("interrupted", "launcher profile changed", time.Now())
+		a.capture.err = nil
+		a.analysisPage = analysisPage{}
 		a.desktopError = ""
 		a.reader.Close()
 		a.frame = Frame{Player: -1}
@@ -63,6 +69,14 @@ func (a *App) profile(raw json.RawMessage) {
 	a.enabled = p.Enabled && !p.Vanilla
 }
 func (a *App) syncOptions() {
+	wasRecordingEnabled := a.analysisEnabled
+	a.analysisEnabled = false
+	defer func() {
+		if wasRecordingEnabled && !a.analysisEnabled {
+			a.capture.close("interrupted", "Telemetry Analysis disabled", time.Now())
+			a.capture.err = nil
+		}
+	}()
 	a.displayMode = "launcher"
 	a.mode = "nearest"
 	a.highlight = false
@@ -86,6 +100,7 @@ func (a *App) syncOptions() {
 		return
 	}
 	options := p.Options[addonID]
+	_ = json.Unmarshal(options["enable_analysis"], &a.analysisEnabled)
 	var display string
 	if json.Unmarshal(options["display_mode"], &display) == nil && display == "window" {
 		a.displayMode = display
@@ -112,9 +127,13 @@ func (a *App) syncOptions() {
 }
 func (a *App) refresh() {
 	a.syncOptions()
+	a.refreshSynced()
+}
+func (a *App) refreshSynced() {
 	if !a.enabled {
 		a.reader.Close()
 		a.frame = Frame{Player: -1}
+		a.capture.close("interrupted", "add-on disabled", time.Now())
 		a.status = "Add-on disabled"
 		return
 	}
@@ -123,6 +142,7 @@ func (a *App) refresh() {
 		a.status = err.Error()
 		// A torn copy is transient. Process/mapping loss clears the display immediately.
 		if a.reader.address == 0 || !errors.Is(err, errUpdating) {
+			a.capture.close("interrupted", "live game connection lost", time.Now())
 			a.frame = Frame{Player: -1}
 			a.expanded = ""
 		}
@@ -132,14 +152,17 @@ func (a *App) refresh() {
 		a.expanded = ""
 		a.columnsOpen = false
 	}
+	if a.analysisEnabled {
+		a.capture.observe(a.profileName, f, time.Now())
+	}
 	a.frame = f
 	a.status = "Live"
-	if f.State&64 != 0 {
+	if f.State&snapshotStale != 0 {
 		a.status = "No new game values · retained"
 	}
 	if f.State&active == 0 {
 		a.status = "Waiting for a session"
-		if f.State&32 != 0 {
+		if f.State&sessionEnded != 0 {
 			a.status = "Session ended"
 		} else if f.Diagnostic != "" {
 			a.status = "Live data unavailable"
@@ -191,6 +214,8 @@ func run(in io.Reader, out io.Writer) error { return runWithDesktop(in, out, nil
 func runWithDesktop(in io.Reader, out io.Writer, desktop *desktopBridge) error {
 	a := App{mode: "nearest", frame: Frame{Player: -1}}
 	defer a.reader.Close()
+	defer func() { a.capture.close("interrupted", "launcher helper stopped", time.Now()) }()
+
 	scanner := bufio.NewScanner(in)
 	scanner.Buffer(make([]byte, 4096), 1024*1024)
 	send := func(value any) { _ = json.NewEncoder(out).Encode(value) }
@@ -235,15 +260,19 @@ func runWithDesktop(in io.Reader, out io.Writer, desktop *desktopBridge) error {
 			updateDesktop()
 			continue
 		case <-ticker.C:
-			if ready && desktop != nil {
+			if ready {
 				a.syncOptions()
-				if a.displayMode == "window" {
-					a.refresh()
+				if a.analysisEnabled || (desktop != nil && a.displayMode == "window") {
+					a.refreshSynced()
 				}
 				updateDesktop()
 				if a.viewSent && a.needsView() {
 					send(M{"method": "invalidate", "params": M{"section": "telemetry"}})
 					a.lastView = a.viewState()
+				}
+				if a.analysisViewSent && a.analysisPage.state != a.analysisState() {
+					a.analysisPage.state = a.analysisState()
+					send(M{"method": "invalidate", "params": M{"section": "analysis"}})
 				}
 			}
 			continue
@@ -292,7 +321,7 @@ func runWithDesktop(in io.Reader, out io.Writer, desktop *desktopBridge) error {
 			if err != nil {
 				break
 			}
-			if p.Section != "telemetry" {
+			if p.Section != "telemetry" && p.Section != "analysis" {
 				err = fmt.Errorf("unknown section")
 				break
 			}
@@ -319,6 +348,16 @@ func runWithDesktop(in io.Reader, out io.Writer, desktop *desktopBridge) error {
 				a.reader.setAddonDir(dir)
 			}
 			a.refresh()
+			if p.Section == "analysis" {
+				if msg.Method == "view" {
+					result = a.analysisView()
+					a.analysisViewSent = true
+				} else if a.analysisPage.state != a.analysisState() {
+					a.analysisPage.state = a.analysisState()
+					send(M{"method": "invalidate", "params": M{"section": "analysis"}})
+				}
+				break
+			}
 			if msg.Method == "view" {
 				result = a.view()
 				a.lastView = a.viewState()
@@ -345,12 +384,21 @@ func runWithDesktop(in io.Reader, out io.Writer, desktop *desktopBridge) error {
 			if !ready {
 				err = fmt.Errorf("hello is required first")
 			} else {
-				result, err = a.event(msg.Params)
+				var p struct{ Section string }
+				if err = json.Unmarshal(msg.Params, &p); err != nil {
+					break
+				}
+				if p.Section == "analysis" {
+					a.syncOptions()
+					result, err = a.analysisEvent(msg.Params)
+				} else {
+					result, err = a.event(msg.Params)
+				}
 			}
 		case "summary":
-			result = M{"label": "LIVE TELEMETRY", "items": []string{"v" + addonVersion + " · live display only"}}
+			result = M{"label": "F1 LIVE TELEMETRY & ANALYSIS", "items": []string{"v" + addonVersion + " · optional analysis recording"}}
 		case "build":
-			result = M{"ops": []any{}, "lines": []string{"Live Telemetry v" + addonVersion + ": native game readers; no UDP or recording."}, "warnings": []any{}}
+			result = M{"ops": []any{}, "lines": []string{"F1 Live Telemetry & Analysis v" + addonVersion + ": Swofty Live State, with opt-in CSV recording."}, "warnings": []any{}}
 		default:
 			err = fmt.Errorf("unsupported launcher method")
 		}

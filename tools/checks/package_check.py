@@ -150,7 +150,7 @@ def sources():
 def main():
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('--archive',type=Path);p.add_argument('--check',choices=('all','integrity','privacy'),default='all');args=p.parse_args()
     manifest=json.loads((ROOT/'swofty.json').read_text(encoding='utf-8-sig'));version=manifest['version']
-    default_dir=ROOT.parent/'Testing' if re.search(r'^\d+\.\d+\.\d+-test(?:[.+-]|$)',version) else ROOT/'dist'
+    default_dir=ROOT.parent/'Testing' if re.search(r'^\d+\.\d+\.\d+-(?:test|prototype)(?:[.+-]|$)',version) else ROOT/'dist'
     archive=args.archive or default_dir/f'F1_Telemetry_v{version}.zip'
     if args.check in ('all','integrity'):
         sidecar=archive.with_name(archive.name+'.sha256')
@@ -162,7 +162,10 @@ def main():
             assert f'const addonVersion = "{version}"' in (ROOT/'source/main.go').read_text(encoding='utf-8')
             assert f'## {version} ' in (ROOT/'CHANGELOG.md').read_text(encoding='utf-8-sig')
             assert archive.name in (ROOT/'README.md').read_text(encoding='utf-8')
-            assert manifest['launcher']['sections']==[{'id':'telemetry','title':'Live Telemetry','icon':'activity'}]
+            assert manifest['launcher']['sections']==[
+                {'id':'telemetry','title':'Live Telemetry','icon':'activity'},
+                {'id':'analysis','title':'Telemetry Analysis','icon':'activity'},
+            ]
             assert manifest['operations']['native']==[{'dll':'bin/telemetry-live.dll'}]
             assert manifest['compat']['launcher']=='>=1.10.9'
             assert manifest['launcher']['program']['windows']=='bin/telemetry-live.exe'
@@ -208,5 +211,5 @@ def main():
         with tempfile.TemporaryDirectory() as temp:
             subprocess.run([sys.executable,str(ROOT/'source/package.py'),'--output',temp],check=True)
             assert hashlib.sha256((Path(temp)/archive.name).read_bytes()).digest()==hashlib.sha256(archive.read_bytes()).digest()
-        print('PASS: complete reproducible live-only ZIP, version consistency, no recordings or generated telemetry images; browser icon included')
+        print('PASS: complete reproducible add-on ZIP, version consistency, no recordings or generated telemetry images; browser icon included')
 if __name__=='__main__':main()

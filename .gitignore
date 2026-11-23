@@ -16,6 +16,7 @@ coverage.out
 
 # Local runtime data and recordings
 /F1 Game Telemetry/
+/F1 Live Telemetry/
 /recordings/
 /settings.json
 *.udp.gz

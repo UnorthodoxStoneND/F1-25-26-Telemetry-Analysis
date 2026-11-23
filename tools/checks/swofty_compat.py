@@ -52,7 +52,12 @@ def compare_game_types(upstream):
         'live.hpp': {
             'GameManagerLive': ('systems_map',),
             'NeRobinHoodMapU64': ('slots','meta'),
+            'GameModeSystem': ('mode',),
+            'GameMode': ('entrants_manager',),
+            'SessionEntrantView': ('team_stat_id','vehicle_id'),
         },
+        'session.hpp': {'EntrantsManager': ('session_begin','session_end')},
+        'entrants.hpp': {},
         'car.hpp': {'CarLive': ('f1_tuning','f1_aero','handling_version','suspension')},
     }
     def contract(text,kind,field):
@@ -62,6 +67,8 @@ def compare_game_types(upstream):
         return re.sub(r'\s+',' ',declaration.strip()),int(offset,0)
     for filename,types in groups.items():
         exported=(upstream/'native/include/swofty/game'/filename).read_text(encoding='utf-8')
+        if filename=='entrants.hpp':
+            assert 'static_assert(sizeof(EntrantRecord) == 0x88)' in exported,'Session entrant stride changed'
         for kind,fields in types.items():
             for field in fields:
                 assert contract(local,kind,field)==contract(exported,kind,field),f'Exported game field changed: {kind}.{field}'
@@ -71,7 +78,7 @@ def stage_game_types(upstream,target):
     folder=Path('native/include/swofty/game')
     destination=target/folder
     destination.mkdir(parents=True,exist_ok=True)
-    for filename in ('live.hpp','car.hpp'):
+    for filename in ('live.hpp','car.hpp','session.hpp','entrants.hpp'):
         shutil.copy2(upstream/folder/filename,destination/filename)
 
 def prepare(no_install=False,offline=False):

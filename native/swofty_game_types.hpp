@@ -7,6 +7,50 @@
 #include <cstddef>
 #include <cstdint>
 namespace swofty::game {
+struct EntrantRecord;
+struct GameSetupMode;
+struct GameMode;
+// Session entrant layouts below also use v1.10.9, 3a56df3eb251f94eca534c82a5d8f1d3d12d13ab.
+struct EntrantsManager {
+    uint8_t _pad_0x0[0x2b0];
+    GameSetupMode *game_setup_mode; // L2 experimental
+    uint8_t _pad_0x2b8[0x28];
+    EntrantRecord *session_begin; // L2 experimental
+    EntrantRecord *session_end; // L2 experimental
+};
+static_assert(offsetof(EntrantsManager, game_setup_mode) == 0x2b0);
+static_assert(offsetof(EntrantsManager, session_begin) == 0x2e0);
+static_assert(offsetof(EntrantsManager, session_end) == 0x2e8);
+
+struct GameModeSystem {
+    uint8_t _pad_0x0[0x88];
+    GameMode *mode; // L2 experimental
+};
+static_assert(offsetof(GameModeSystem, mode) == 0x88);
+
+struct GameMode {
+    uint8_t _pad_0x0[0x260];
+    EntrantsManager *entrants_manager; // L2 experimental
+    uint8_t _pad_0x268[0x10];
+    char *name; // L2 experimental
+    uint8_t _pad_0x280[0x20];
+};
+static_assert(offsetof(GameMode, entrants_manager) == 0x260);
+static_assert(offsetof(GameMode, name) == 0x278);
+static_assert(sizeof(GameMode) == 0x2a0);
+
+struct SessionEntrantView {
+    uint8_t _pad_0x0[0x58];
+    uint32_t team_stat_id; // L2 experimental
+    uint8_t _pad_0x5c[0xc];
+    uint32_t badge_stat_id; // L2 experimental
+    uint8_t _pad_0x6c[0x16];
+    uint8_t vehicle_id; // L2 experimental
+};
+static_assert(offsetof(SessionEntrantView, team_stat_id) == 0x58);
+static_assert(offsetof(SessionEntrantView, badge_stat_id) == 0x68);
+static_assert(offsetof(SessionEntrantView, vehicle_id) == 0x82);
+
 struct NeRobinHoodMapU64;
 struct GameVehicleProgressSystem;
 struct GameManagerLive {

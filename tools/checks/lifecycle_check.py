@@ -14,6 +14,6 @@ with tempfile.TemporaryDirectory() as temp:
     result=subprocess.run([str(root/'bin/telemetry-live.exe')],input=''.join(json.dumps(r)+'\n' for r in requests),capture_output=True,text=True,timeout=10,check=True)
     replies=[json.loads(line) for line in result.stdout.splitlines()]
     assert len(replies)==4 and replies[0]['result']['api']==1 and replies[1]['result']['tick'] is True
-    assert 'error' in replies[2] and 'live display only' in str(replies[3])
+    assert 'Telemetry Analysis is disabled' in str(replies[2]['result']) and 'optional analysis recording' in str(replies[3])
     assert not path.exists() and not result.stderr
-print('PASS: built helper handshake, live view, removed analysis, no files, clean EOF shutdown')
+print('PASS: built helper handshake, live view, opt-in analysis defaults off, no files, clean EOF shutdown')

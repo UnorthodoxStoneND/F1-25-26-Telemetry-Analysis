@@ -65,6 +65,4 @@ if not args.tests_only:
         subprocess.run([str(output/'publisher_test.exe'),str(output/'swofty_core.dll'),str(root/'bin/telemetry-live.dll')], check=True, timeout=30)
         subprocess.run([str(output/'publisher_test.exe'),str(output/'swofty_core.dll'),str(root/'bin/telemetry-live.dll'),'verified'], check=True, timeout=30)
         subprocess.run([str(output/'publisher_test.exe'),str(output/'swofty_core.dll'),str(root/'bin/telemetry-live.dll'),'current'], check=True, timeout=30)
-        for build in ('verified','current'):
-            subprocess.run([str(output/'publisher_test.exe'),str(output/'swofty_core.dll'),str(root/'bin/telemetry-live.dll'),build,'missing-screen'], check=True, timeout=30)
 print('PASS: native CI artifacts compiled; tests run separately' if args.build_only else 'PASS: native readers, session lifecycle and wire ABI; no game launched')

@@ -1,5 +1,23 @@
 # F1 Telemetry changelog
 
+## 0.7.0-prototype.3 — 2026-11-23
+
+- Record Live State red-flag status in vehicle samples and log transitions in a session-level CSV while the retro window is hidden or the session is suspended.
+- Include flag transitions in new raw exports. Earlier recordings can still be exported in their original format.
+
+## 0.7.0-prototype.2 — 2026-11-23
+
+- Keep continuous Flashback samples in one epoch and preserve the original tyre compound on completed laps that survive the rewind.
+- Ignore normal out-lap timing-line resets.
+- Show Korea International Circuit and readable team names. Resolve missing badge keys through the launcher-provided session-entrant binding and game database.
+
+## 0.7.0-prototype — 2026-11-23
+
+- Renamed the add-on to F1 Live Telemetry & Analysis with the same add-on ID.
+- Added opt-in local CSV recording of supported weekend sessions from Swofty Live State. Background recording works with either live display.
+- Added a Telemetry Analysis launcher page with saved-session selection, practice rankings and raw CSV export.
+- Switched retro session visibility to the launcher's existing lifecycle and flow signals.
+
 ## 0.6.0 — 2026-11-21
 
 - Preserve main’s helper build fixes: uncompressed symbols/DWARF on both platforms and Linux PIE/ASLR, with explicit binary-contract checks.

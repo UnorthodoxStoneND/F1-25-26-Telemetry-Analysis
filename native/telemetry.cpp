@@ -15,6 +15,7 @@
 #include "badges.h"
 #include "proton_transport.h"
 #include "outlap.h"
+#include "analysis_teams.h"
 
 namespace {
 const SwoftyApi* api;
@@ -34,9 +35,17 @@ char binding_error[192]{};
 uint32_t game_stamp=0;
 directlive::Sites sites;
 directlive::Context direct_context;
+uint64_t game_mode_key=0;
+analysisteams::Labels team_labels;
 outlap::Tracker outlaps;
 sessionmetrics::Sites metric_sites;
 uint64_t next_sample=0;
+const SwoftyCareerSaves* career_saves;
+const SwoftyCareerOps* career_ops;
+uint64_t run_id=0,attempt=0,next_career_read=0;
+int32_t season=-1,round=-1;
+uint32_t end_reason=0;
+char career_id[128]{};
 uint32_t context_kind=livewire::SESSION_UNKNOWN;
 
 bool copy_memory(uint64_t at,void* out,size_t len) {
@@ -74,6 +83,9 @@ template<class T> const T* core_export(const char* name) {
 void publish() {
     if(!shared) return;
     session.stamp(GetTickCount64());
+    session.frame.analysis.run=run_id;
+    session.frame.analysis.attempt=attempt;
+    session.frame.analysis.end_reason=end_reason;
     // Prepare privately while readers can still use the previous complete view.
     if(badge_shared) badge_publisher.sample(live,session.frame,api?api->log:nullptr);
     auto publish_pair=[&](livewire::Frame* target,badgewire::Frame* image_target) {
@@ -96,6 +108,13 @@ void publish() {
         reinterpret_cast<badgewire::Frame*>(static_cast<char*>(proton_mapping.view)+sizeof(livewire::Frame)));
 }
 
+// A suspension can hide the window and make car rows unavailable while
+// Live State still has a session header. Publish its flag independently.
+void publish_flags_only() {
+    session.frame.analysis.red_flag_status=session.entered?liveapi::read_red_flag(live):0;
+    publish();
+}
+
 void on_event(const SwoftyEvent* event,void*) {
     if(!event||!event->name) return;
     if(!std::strcmp(event->name,"flow.state")) {
@@ -106,6 +125,13 @@ void on_event(const SwoftyEvent* event,void*) {
         }
         if(ready!=session.gameplay) publish();
         return;
+    }
+    if(!std::strcmp(event->name,"session.start")) {
+        ++attempt;end_reason=0;next_career_read=0;career_id[0]=0;season=round=-1;
+        team_labels.clear();
+    } else if(!std::strcmp(event->name,"session.end")) {
+        // Keep this through session.unload, which frequently follows in the same tick.
+        end_reason=event->a>=0&&event->a<=2?static_cast<uint32_t>(event->a)+1:0;
     }
     session.event(event->name);
     if(!std::strcmp(event->name,"session.start")||session.ended) {
@@ -118,15 +144,6 @@ int on_session_context(void*,SwoftyHookCall* call) {
         context_kind=sessioninfo::kind(api->hooks,call->context);
     return 0;
 }
-// Same read-only wrapper ABI as the released core's ui.cpp open_hook. Do not
-// use SessionHost.on_screen: it is a single listener owned by other core clients.
-using OpenScreenFn=uint64_t(void*,void*,void*,void*);
-OpenScreenFn* original_screen;
-uint64_t open_screen(void* scene,void* screen,void* a3,void* a4) {
-    const auto result=original_screen(scene,screen,a3,a4);
-    if(session.opened_screen(copy_memory,reinterpret_cast<uint64_t>(screen))) publish();
-    return result;
-}
 void on_frame(double,void*) {
     const auto now=GetTickCount64();
     if(now<next_sample) return;
@@ -138,7 +155,7 @@ void on_frame(double,void*) {
         std::snprintf(session.frame.diagnostic,sizeof session.frame.diagnostic,
             "Live data unavailable: no supported game-binding layout for build %u.",game_stamp);
         if(binding_error[0]) std::snprintf(session.frame.diagnostic,sizeof session.frame.diagnostic,"%s",binding_error);
-        publish();return;
+        publish_flags_only();return;
     }
     uint32_t status=0;uint64_t age=0;
     auto hash=[](const char* text){uint32_t h=5381;for(;*text;text++)h=h*33+uint8_t(*text);return h;};
@@ -153,23 +170,49 @@ void on_frame(double,void*) {
         session.frame.diagnostic[0]=0;
         if(flow_result==SWOFTY_ASSET_UNAVAILABLE)
             std::snprintf(session.frame.diagnostic,sizeof session.frame.diagnostic,"Swofty's session-state API is unavailable.");
-        publish();return;
+        publish_flags_only();return;
     }
     livewire::Frame next{};auto read=copy_memory;
-    if(direct_context.fill(read,sites,next,live,car_ops)) {
+    if(direct_context.fill(read,sites,next,live,car_ops,session.gameplay)) {
+        if(session.gameplay) {
+            analysisteams::fill(read,direct_context.registry.find(game_mode_key),api->db,team_labels,now,next);
+            if(now>=next_career_read) {
+                next_career_read=now+1000;
+                size_t size=0;
+                if(career_saves&&career_saves->version>=1&&career_saves->current&&!career_id[0]) {
+                    if(career_saves->current(career_id,sizeof career_id,&size)!=SWOFTY_ASSET_OK||size>=sizeof career_id)
+                        career_id[0]=0;
+                }
+                if(career_id[0]&&career_ops&&career_ops->version>=7&&career_ops->current_round&&round<1) {
+                    int32_t current_season=-1,current_round=-1,rounds=0;
+                    if(career_ops->current_round(&current_season,&current_round,&rounds)==SWOFTY_ASSET_OK&&current_season>=0&&current_round>0) {
+                        season=current_season;round=current_round;
+                    }
+                }
+            }
+            next.analysis.sample=now;
+            next.analysis.season=season;next.analysis.round=round;
+            std::memcpy(next.analysis.career,career_id,sizeof career_id);
+        }
         next.session_kind=sessioninfo::compatible_kind(next.session_type,context_kind);
         sessionmetrics::fill(read,metric_sites,direct_context.registry,next,live,time_remaining);
         outlaps.apply(next,session.serial);
         session.frame=next;
-    } else if(!(session.frame.state&livewire::ACTIVE)) {
+        publish();return;
+    }
+    if(!(session.frame.state&livewire::ACTIVE)) {
         session.frame=next;
     } else {
         session.frame.state|=64; // No fresh values; retain the last display until explicit end.
         std::snprintf(session.frame.diagnostic,sizeof session.frame.diagnostic,"%s",next.diagnostic);
     }
-    publish();
+    publish_flags_only();
 }
 void on_load() {
+    FILETIME started{};GetSystemTimeAsFileTime(&started);
+    run_id=(uint64_t(started.dwHighDateTime)<<32)|started.dwLowDateTime;
+    career_saves=core_export<SwoftyCareerSaves>("SwoftyCoreCareerSaves");
+    career_ops=core_export<SwoftyCareerOps>("SwoftyCoreCareerOps");
     live=core_export<SwoftyLive>("SwoftyCoreLive");
     badge_publisher.prepare(live);
     car_ops=core_export<SwoftyCarOps>("SwoftyCoreCarOps");
@@ -178,6 +221,7 @@ void on_load() {
     direct=memory && verified_layout();
     if(direct) {
         sites.manager=resolve_binding("g_Game_Manager");
+        game_mode_key=api->resolve("k_Live_GameModeSystemKey");
         metric_sites.red_key=api->resolve("k_Live_RedFlagSystemKey");
         metric_sites.red_vt=api->resolve("vt_Sess_RedFlagSystem");
         metric_sites.race_vt=api->resolve("vt_Sess_RaceRuleset");
@@ -216,7 +260,7 @@ void on_load() {
     events_ok &= api->events->on_frame(on_frame,nullptr,&token)==SWOFTY_ASSET_OK;
     if(!events_ok) std::snprintf(session.frame.diagnostic,sizeof session.frame.diagnostic,"The launcher core could not activate live session callbacks.");
     publish();
-    api->log("[telemetry] live display ready; build %u; binding readers %s; no recording or network receiver",game_stamp,direct?"on":"off");
+    api->log("[telemetry] live display ready; build %u; binding readers %s; read-only snapshots; no network receiver",game_stamp,direct?"on":"off");
 }
 }
 
@@ -227,25 +271,10 @@ extern "C" __declspec(dllexport) int SwoftyAddonInit(const SwoftyApi* value) {
     // Do not wait for on_load/hook settlement: the menus may render badges first.
     live=core_export<SwoftyLive>("SwoftyCoreLive");
     badge_publisher.prepare(live);
-    memory=core_export<SwoftyMem>("SwoftyCoreMem");
-    if(!memory || memory->version!=1) memory=nullptr;
-    // Named wrappers never alter arguments/results and are offered only when resolved.
-    // Registration happens before core commit. On the known layout, declare the
-    // hooks even while their code is encrypted: the core waits for decryption.
+    // ON_LOAD starts the publisher. Session signals come from the core's
+    // existing event dispatcher and documented session/flow hook points.
     SwoftyMixin load{nullptr,SWOFTY_MIXIN_ON_LOAD,0,reinterpret_cast<void*>(on_load),nullptr};
     if(!api->register_mixins(&load,1)) return 0;
-    // Screen-open is optional: the running core's exported binding list may
-    // omit this internal UI target. Declaring an absent target drops ALL of
-    // this add-on's mixins during core commit, including its publisher.
-    if(memory && verified_layout()) {
-        if(api->resolve("Vm_Open_Screen")) {
-            SwoftyMixin screen_hook{"Vm_Open_Screen",SWOFTY_MIXIN_WRAP,0,reinterpret_cast<void*>(open_screen),reinterpret_cast<void**>(&original_screen)};
-            if(!api->register_mixins(&screen_hook,1))
-                api->log("[telemetry] optional career-rewards screen hook registration unavailable; telemetry remains enabled");
-        } else {
-            api->log("[telemetry] optional career-rewards screen hook unavailable (Vm_Open_Screen); using flow/session visibility signals");
-        }
-    }
     return 1;
 }
 

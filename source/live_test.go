@@ -14,6 +14,7 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 	"unsafe"
 )
 
@@ -171,6 +172,23 @@ func TestLiveViewAndSetup(t *testing.T) {
 		if e = enc.Encode(a.view()); e != nil {
 			t.Fatal(e)
 		}
+		if e = enc.Encode(a.analysisView()); e != nil {
+			t.Fatal(e)
+		}
+		a.analysisEnabled = true
+		a.capture.root = t.TempDir()
+		now := time.Now()
+		f := Frame{State: active | windowReady, SessionType: 1,
+			Analysis: AnalysisSession{Run: 1, Attempt: 1, Sample: 1, Track: "silverstone"},
+			Cars:     []Car{{Known: knownName | knownLaps | knownBest, Name: "Driver", Best: 78900}}}
+		a.capture.observe("Test profile", f, now)
+		a.capture.close("ended", "session ended", now)
+		if a.capture.err != nil {
+			t.Fatal(a.capture.err)
+		}
+		if e = enc.Encode(a.analysisView()); e != nil {
+			t.Fatal(e)
+		}
 	}
 }
 func TestPressureSetupForPlayerAndOtherCars(t *testing.T) {
@@ -234,9 +252,9 @@ func TestLauncherSettings(t *testing.T) {
 		t.Fatal("unsafe profile path accepted")
 	}
 }
-func TestProtocolAndNoDiskWrites(t *testing.T) {
+func TestProtocolAndNoDiskWritesByDefault(t *testing.T) {
 	root := t.TempDir()
-	hello := fmt.Sprintf(`{"id":1,"method":"hello","params":{"api":1,"launcher":"1.9.76","data_dir":%q,"profile":{"name":"default","enabled":true}}}`, filepath.Join(root, "addons", addonID))
+	hello := fmt.Sprintf(`{"id":1,"method":"hello","params":{"api":1,"launcher":"1.9.76","data_dir":%q,"profile":{"name":"default","enabled":false}}}`, filepath.Join(root, "addons", addonID))
 	input := hello + "\n" + `{"id":2,"method":"view","params":{"section":"telemetry"}}` + "\n" + `{"id":3,"method":"view","params":{"section":"analysis"}}` + "\n"
 	var output bytes.Buffer
 	if err := run(strings.NewReader(input), &output); err != nil {
@@ -248,8 +266,8 @@ func TestProtocolAndNoDiskWrites(t *testing.T) {
 	}
 	var third M
 	_ = json.Unmarshal([]byte(lines[2]), &third)
-	if third["error"] == nil {
-		t.Fatal("analysis still enabled")
+	if third["error"] != nil || !strings.Contains(lines[2], "Telemetry Analysis is disabled") {
+		t.Fatal("disabled analysis view missing")
 	}
 	files, err := os.ReadDir(root)
 	if err != nil || len(files) != 0 {

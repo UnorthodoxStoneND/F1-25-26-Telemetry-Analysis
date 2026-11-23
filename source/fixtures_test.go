@@ -7,8 +7,8 @@ import (
 
 func fixture() []byte {
 	b := make([]byte, frameSize)
-	copy(b, "USTLIVE5")
-	binary.LittleEndian.PutUint32(b[8:], 5)
+	copy(b, "USTLIVE6")
+	binary.LittleEndian.PutUint32(b[8:], 6)
 	binary.LittleEndian.PutUint32(b[12:], frameSize)
 	binary.LittleEndian.PutUint32(b[40:], active)
 	binary.LittleEndian.PutUint32(b[48:], 1)

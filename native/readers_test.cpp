@@ -77,5 +77,5 @@ int main(int argc,char** argv) {
     abi.known|=livewire::LAST|livewire::LAST_SECTORS;abi.last_ms=81000;abi.last_sectors[0]=21000;abi.last_sectors[1]=30000;abi.last_sectors[2]=30000;
     abi.known|=livewire::PENALTIES|livewire::TIME_PENALTY;abi.drive_through=2;abi.stop_go=3;abi.time_penalty_ms=5250;
     if(argc>1){std::ofstream out(argv[1],std::ios::binary);out.write(reinterpret_cast<const char*>(&life.frame),sizeof life.frame);assert(out.good());}
-    std::cout<<"PASS: setup pressures, missing/invalid setup, lifecycle and IPC v5 ABI\n";
+    std::cout<<"PASS: setup pressures, missing/invalid setup, lifecycle and IPC v6 ABI\n";
 }

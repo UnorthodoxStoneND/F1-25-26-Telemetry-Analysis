@@ -22,7 +22,7 @@ python source/package.py
 python tools/checks/package_check.py
 ```
 
-For release versions, build and validate the resulting `dist/F1_Telemetry_v<version>.zip` and its generated `.zip.sha256` checksum for GitHub and the browser. Retain the validated ZIP and matching checksum under `../Releases/<version>/`, alongside a `SHA256SUMS.txt` copy for publication. Existing files in Releases are left in place. Test versions go into `../Testing/` instead, with previous test ZIP/checksum pairs moved into `../Testing/Archive/` after the new package is verified. A new version or package has a new hash; older antivirus results do not cover the new archive or rebuilt executable.
+For release versions, build and validate the resulting `dist/F1_Telemetry_v<version>.zip` and its generated `.zip.sha256` checksum for GitHub and the browser. Retain the validated ZIP and matching checksum under `../Releases/<version>/`, alongside a `SHA256SUMS.txt` copy for publication. Existing files in Releases are left in place. Test and prototype versions go into `../Testing/` instead, with previous test ZIP/checksum pairs moved into `../Testing/Archive/` after the new package is verified. A new version or package has a new hash; older antivirus results do not cover the new archive or rebuilt executable.
 
 ## GitHub
 

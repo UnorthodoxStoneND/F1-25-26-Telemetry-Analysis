@@ -6,13 +6,24 @@
 
 // Cached core snapshot. Never uses the older UDP-backed telemetry API.
 namespace liveapi {
+inline uint8_t red_flag(const SwoftyLiveSession& session) {
+ return (session.have&SWOFTY_LIVE_SHAVE_RED_FLAG)&&session.red_flag<=2?uint8_t(session.red_flag+1):0;
+}
+inline uint8_t read_red_flag(const SwoftyLive* api) {
+ if(!api||api->version<1||!api->available||!api->session||!api->available()) return 0;
+ SwoftyLiveSession session{};session.version=1;session.size=sizeof session;
+ if(api->session(&session)!=SWOFTY_ASSET_OK||session.version<1||session.size<sizeof session) return 0;
+ return red_flag(session);
+}
+
 struct Snapshot {
  SwoftyLiveSession session{};
  SwoftyLiveCar cars[32]{};
  SwoftyLiveCarDetail details[32]{};
  char names[32][128]{};
+ char teams[32][40]{};
  bool valid=false;
- void load(const SwoftyLive* api,unsigned count) {
+ void load(const SwoftyLive* api,unsigned count,bool analysis=false) {
   *this={};
   if(!api||api->version<6||!api->car_detail||!api->available||!api->session||!api->car||!api->seq||count>32||!api->available()) return;
   uint64_t before=0,after=0;
@@ -28,6 +39,9 @@ struct Snapshot {
    if(api->version>=2&&api->driver_name&&api->driver_name(id,names[id],sizeof names[id])!=SWOFTY_ASSET_OK)
     names[id][0]=0;
    if(!std::memchr(names[id],0,sizeof names[id])) names[id][0]=0;
+   if(analysis&&racer_candidate(c)&&api->team_badge&&
+      (api->team_badge(id,teams[id],sizeof teams[id])!=SWOFTY_ASSET_OK||
+       !std::memchr(teams[id],0,sizeof teams[id]))) teams[id][0]=0;
   }
   valid=api->seq(&after)==SWOFTY_ASSET_OK&&before==after;
  }
@@ -58,9 +72,35 @@ struct Snapshot {
   if(!valid||!(session.have&SWOFTY_LIVE_SHAVE_PLAYER)||session.player< -1||session.player>=int(count)) return false;
   out=session.player;return true;
  }
- bool racer(unsigned id)const {
-  return valid&&id<32&&(cars[id].have&SWOFTY_LIVE_HAVE_IDENT)&&
-   (cars[id].flags&SWOFTY_LIVE_CAR_RACER);
+ static bool racer_candidate(const SwoftyLiveCar& car) {
+  return (car.have&SWOFTY_LIVE_HAVE_IDENT)&&(car.flags&SWOFTY_LIVE_CAR_RACER);
+ }
+ bool racer(unsigned id)const { return valid&&id<32&&racer_candidate(cars[id]); }
+ void capture(unsigned id,livewire::AnalysisCar& out)const {
+  const auto& c=cars[id];const auto& d=details[id];
+  std::memcpy(out.team,teams[id],sizeof out.team);
+  if(d.have&SWOFTY_LIVE_HAVE_LAP_TIMES) {
+   out.known|=livewire::ANALYSIS_LAP;out.current_ms=d.current_lap_ms;out.best_lap_number=d.best_lap_number;
+   std::memcpy(out.current_sectors,d.current_sector_ms,sizeof out.current_sectors);out.lap_flags=d.lap_flags;
+  }
+  if(d.have&SWOFTY_LIVE_HAVE_TYRE_AGE) out.stint_laps=d.tyre_stint_laps;
+  if((c.have&SWOFTY_LIVE_HAVE_SPEED)&&readers::range(c.speed,0,250)) {
+   out.known|=livewire::ANALYSIS_SPEED;out.speed=c.speed;
+  }
+  if((c.have&SWOFTY_LIVE_HAVE_PEDALS)&&readers::range(c.throttle,0,1)&&readers::range(c.brake,0,1)) {
+   out.known|=livewire::ANALYSIS_PEDALS;out.throttle=c.throttle;out.brake=c.brake;
+  }
+  if((c.have&SWOFTY_LIVE_HAVE_GEAR)&&c.gear>=-1&&c.gear<=10) {out.known|=livewire::ANALYSIS_GEAR;out.gear=c.gear;}
+  if((c.have&SWOFTY_LIVE_HAVE_RPM)&&readers::range(c.rpm,0,30000)) {out.known|=livewire::ANALYSIS_RPM;out.rpm=c.rpm;}
+  if((c.have&SWOFTY_LIVE_HAVE_PROGRESS)&&c.lap>=0&&c.lap<1000&&readers::range(c.lap_m,-500,100000)) {
+   out.known|=livewire::ANALYSIS_PROGRESS;out.lap=c.lap;out.lap_m=c.lap_m;
+  }
+  if((c.have&SWOFTY_LIVE_HAVE_GAP_LEADER)&&c.gap_leader_ms>=0&&c.gap_leader_ms<=10800000) {
+   out.known|=livewire::ANALYSIS_GAP;out.gap_leader_ms=c.gap_leader_ms;
+  }
+  if(c.have&SWOFTY_LIVE_HAVE_PIT) {
+   out.known|=livewire::ANALYSIS_PIT;out.pit_status=c.pit_status;out.pit_stops=c.pit_stops;
+  }
  }
  void apply(unsigned id,livewire::Car& out,unsigned count)const {
   if(!valid||id>=32) return;

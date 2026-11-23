@@ -8,12 +8,17 @@ import (
 	"strings"
 )
 
-const frameSize = 10752
+const analysisOffset = 10752
+const analysisCarOffset = analysisOffset + 216
+const analysisCarSize = 96
+const frameSize = analysisCarOffset + analysisCarSize*maxCars
 const carSize = 328
 const maxCars = 32
 const (
 	active              = 1
 	paused              = 2
+	sessionEnded        = 32
+	snapshotStale       = 64
 	sessionTimer        = 128
 	sessionLaps         = 256
 	windowReady         = 512
@@ -58,6 +63,7 @@ type Car struct {
 	LastSectors                       [3]uint32
 	DriveThrough, StopGo              uint8
 	TimePenaltyMS                     uint32
+	Analysis                          AnalysisCar
 }
 type Frame struct {
 	Session, Tick uint64
@@ -68,6 +74,7 @@ type Frame struct {
 	Progress      uint32
 	Diagnostic    string
 	Cars          []Car
+	Analysis      AnalysisSession
 }
 
 func cstring(b []byte) string {
@@ -81,7 +88,7 @@ func decode(b []byte) (Frame, error) {
 }
 func decodeInto(b []byte, storage []Car) (Frame, error) {
 	f := Frame{Player: -1}
-	if len(b) != frameSize || string(b[:8]) != "USTLIVE5" || binary.LittleEndian.Uint32(b[8:]) != 5 || binary.LittleEndian.Uint32(b[12:]) != frameSize {
+	if len(b) != frameSize || string(b[:8]) != "USTLIVE6" || binary.LittleEndian.Uint32(b[8:]) != 6 || binary.LittleEndian.Uint32(b[12:]) != frameSize {
 		return f, fmt.Errorf("incompatible live snapshot")
 	}
 	u := func(n int) uint32 { return binary.LittleEndian.Uint32(b[n:]) }
@@ -93,6 +100,15 @@ func decodeInto(b []byte, storage []Car) (Frame, error) {
 	f.SessionKind = u(56)
 	f.Progress = u(60)
 	f.Diagnostic = cstring(b[64:256])
+	at := analysisOffset
+	u64 := func(n int) uint64 { return binary.LittleEndian.Uint64(b[n:]) }
+	f.Analysis = AnalysisSession{
+		Run: u64(at), Attempt: u64(at + 8), Sample: u64(at + 16),
+		Season: int32(u(at + 24)), Round: int32(u(at + 28)), EndReason: u(at + 32),
+		SafetyCarKnown: b[at+36] != 0, SafetyCar: b[at+37], Chequered: b[at+38] != 0,
+		RedFlag: redFlagStatus(b[at+39]),
+		Track:   cstring(b[at+40 : at+88]), Career: cstring(b[at+88 : at+216]),
+	}
 	count := u(48)
 	if count > maxCars {
 		return Frame{}, fmt.Errorf("invalid driver count")
@@ -106,6 +122,15 @@ func decodeInto(b []byte, storage []Car) (Frame, error) {
 			return Frame{}, fmt.Errorf("invalid vehicle identity")
 		}
 		seen |= 1 << c.Vehicle
+		extra := analysisCarOffset + int(c.Vehicle)*analysisCarSize
+		float := func(offset int) float32 { return math.Float32frombits(u(extra + offset)) }
+		c.Analysis = AnalysisCar{
+			Known: u(extra), Current: u(extra + 4), BestLap: u(extra + 8), CurrentS1: u(extra + 12), CurrentS2: u(extra + 16),
+			GapLeader: int32(u(extra + 20)), Gear: int32(u(extra + 24)), Lap: int32(u(extra + 28)),
+			Speed: float(32), Throttle: float(36), Brake: float(40), RPM: float(44), LapDistance: float(48),
+			LapFlags: b[extra+52], PitStatus: b[extra+53], PitStops: b[extra+54], Stint: b[extra+55],
+			Team: cstring(b[extra+56 : extra+96]),
+		}
 		c.DriveThrough, c.StopGo = b[at+316], b[at+317]
 		c.TimePenaltyMS = u(at + 320)
 		if c.TimePenaltyMS > 3600000 {

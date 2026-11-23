@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
   "id": "unorthodoxstonendmodding.udp-telemetry",
-  "name": "F1 Live Telemetry",
-  "version": "0.6.0",
+  "name": "F1 Live Telemetry & Analysis",
+  "version": "0.7.0-prototype.3",
   "author": "UnorthodoxStoneNDmodding",
-  "description": "Live timing, tyre wear and setups in the launcher or an optional standalone retro window, using Swofty Live State and launcher-provided bindings. No UDP or recording.",
+  "description": "Live timing in the launcher or retro window, with optional session recording, practice rankings and CSV export in Telemetry Analysis.",
   "license": "MIT",
   "repository": "https://github.com/UnorthodoxStoneND/F1-25-26-Telemetry-Analysis",
   "category": "utility",
@@ -100,6 +100,13 @@
       "label": "Sliding row animation (retro window)",
       "default": true,
       "binds": "native"
+    },
+    {
+      "id": "enable_analysis",
+      "type": "toggle",
+      "label": "Enable Telemetry Analysis",
+      "default": false,
+      "binds": "native"
     }
   ],
   "operations": {
@@ -118,6 +125,11 @@
       {
         "id": "telemetry",
         "title": "Live Telemetry",
+        "icon": "activity"
+      },
+      {
+        "id": "analysis",
+        "title": "Telemetry Analysis",
         "icon": "activity"
       }
     ],
